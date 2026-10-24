@@ -27,7 +27,7 @@ service cloud.firestore {
     }
 
     match /certificates/{certId} {
-      allow get: if isSignedIn();
+      allow get: if true;
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isValidId(certId) && isValidCertificate(incoming());
       allow update: if isSignedIn() && isValidCertificate(incoming()) && incoming().cert_id == existing().cert_id;

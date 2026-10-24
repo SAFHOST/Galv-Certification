@@ -220,7 +220,7 @@ class CertificateRepository {
         });
       }
     } catch (e) {
-      console.error('Failed to initialize from Firestore', e);
+      console.warn('Failed to initialize all certificates from Firestore (possibly unauthenticated)', e);
     }
 
     this.initialized = true;

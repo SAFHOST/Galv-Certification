@@ -413,12 +413,18 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
                       <td className="py-3.5 px-4">
                         <div className="text-[10px] text-slate-500 font-mono">
                           {cert.audit_trail ? (
-                             <>
+                             <div className="space-y-0.5">
                               <div>IP: {cert.audit_trail.issuance_ip}</div>
                               <div className="truncate max-w-[120px]" title={cert.audit_trail.location}>
                                 Loc: {cert.audit_trail.location}
                               </div>
-                             </>
+                              <div className="truncate max-w-[120px]">
+                                Hash: {cert.sha256_hash ? cert.sha256_hash.slice(0, 8) : 'N/A'}
+                              </div>
+                              <div className="truncate max-w-[120px]">
+                                Time: {cert.audit_trail.issued_at ? new Date(cert.audit_trail.issued_at).toLocaleTimeString() : 'N/A'}
+                              </div>
+                             </div>
                           ) : 'N/A'}
                         </div>
                       </td>
