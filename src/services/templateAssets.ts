@@ -1,9 +1,6 @@
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const root = path.resolve(__dirname, '../../');
+const root = process.cwd();
 
 export const TEMPLATE_ASSETS = {
   logoPath: path.join(root, 'public/assets/aistudio/image_576b524e.png'),

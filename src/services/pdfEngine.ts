@@ -1,4 +1,5 @@
-import puppeteer, { Browser } from 'puppeteer';
+import puppeteer, { Browser } from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import QRCode from 'qrcode';
 import fs from 'fs';
 import path from 'path';
@@ -25,7 +26,7 @@ async function getBrowser(): Promise<Browser> {
   if (globalBrowser && globalBrowser.connected) {
     try {
       // Check if we can actually use the browser
-      const pages = await globalBrowser.pages();
+      await globalBrowser.pages();
       return globalBrowser;
     } catch (e) {
       console.warn('[PDF Engine] Browser connection stale, restarting...');
@@ -33,22 +34,26 @@ async function getBrowser(): Promise<Browser> {
     }
   }
   
-  console.log('[PDF Engine] Launching Puppeteer...');
+  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+  console.log(`[PDF Engine] Launching Puppeteer (Production: ${isProduction})...`);
+  
   try {
-    globalBrowser = await puppeteer.launch({
-      headless: true,
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
+    const launchOptions: any = {
+      args: isProduction ? chromium.args : [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-zygote',
-        '--single-process',
-        '--font-render-hinting=none',
-        '--disable-extensions'
-      ]
-    });
+        '--disable-gpu'
+      ],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: isProduction 
+        ? await chromium.executablePath() 
+        : (process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'),
+      headless: isProduction ? chromium.headless : true,
+      ignoreHTTPSErrors: true,
+    };
+
+    globalBrowser = await puppeteer.launch(launchOptions);
     return globalBrowser;
   } catch (err: any) {
     console.error('[PDF Engine] Puppeteer Launch Error:', err);
@@ -102,8 +107,12 @@ export async function generateCertificatePDF(
   const logoPath = TEMPLATE_ASSETS.logoPath;
   const signaturePath = TEMPLATE_ASSETS.signaturePath;
   const stampPath = TEMPLATE_ASSETS.stampPath;
-  const templatePath = path.resolve(__dirname, '../templates/certificate.html');
-  const fontPath = path.resolve(__dirname, '../../public/assets/template/Cairo.ttf');
+  
+  // Use process.cwd() for reliable paths across environments
+  const rootDir = process.cwd();
+  const templatePath = path.join(rootDir, 'src/templates/certificate.html');
+  const fontPath = path.join(rootDir, 'public/assets/template/Cairo.ttf');
+  const arabicAssetsPath = path.join(rootDir, 'arabic_assets.json');
 
   if (!fs.existsSync(logoPath)) throw new Error(`Logo file not found at ${logoPath}`);
   if (!fs.existsSync(signaturePath)) throw new Error(`Signature file not found at ${signaturePath}`);
@@ -128,7 +137,6 @@ export async function generateCertificatePDF(
     .replace(/^M\/S\s+/i, '')
     .trim();
   
-  const arabicAssetsPath = path.resolve(__dirname, '../../arabic_assets.json');
   let arabicAssets = { header: '', footer: '' };
   if (fs.existsSync(arabicAssetsPath)) {
     arabicAssets = JSON.parse(fs.readFileSync(arabicAssetsPath, 'utf8'));
