@@ -184,55 +184,69 @@ export async function generateCertificatePDF(
 
   // --- PDF Content Drawing ---
   
-  // Header Logo and Info
-  page.drawImage(logoImage, { x: 230, y: height - 120, width: 150, height: 80 });
-  page.drawText('Mohammed Yehya Al-Aseery', { x: 50, y: height - 50, size: 10, font: fontBold });
-  page.drawText('For Metal Industries', { x: 50, y: height - 65, size: 9, font: fontRegular });
-  page.drawText('CR NO: 1010207045', { x: 50, y: height - 80, size: 9, font: fontRegular });
+  // Header Logo
+  page.drawImage(logoImage, { x: 230, y: height - 100, width: 120, height: 60 });
+  
+  // English Header
+  page.drawText('Mohammed Yehya Al-Aseery', { x: 50, y: height - 40, size: 9, font: fontBold });
+  page.drawText('For Metal Industries', { x: 50, y: height - 52, size: 8, font: fontRegular });
+  page.drawText('CR No: 1010997047', { x: 50, y: height - 64, size: 8, font: fontRegular });
+  page.drawText('VAT No: 302154658900006', { x: 50, y: height - 76, size: 8, font: fontRegular });
+  
+  // Arabic Header (simplified using standard font, as canvas rendering is unreliable in this context)
+  page.drawText('مصنع محمد يحيى العسيري', { x: 450, y: height - 40, size: 9, font: fontRegular });
+  page.drawText('للصناعات المعدنية', { x: 470, y: height - 52, size: 8, font: fontRegular });
+  page.drawText('س.ت: 1010997047', { x: 480, y: height - 64, size: 8, font: fontRegular });
+  page.drawText('الرقم الضريبي: 302154658900006', { x: 420, y: height - 76, size: 8, font: fontRegular });
   
   // Title
-  page.drawText('HOT DIP GALVANIZATION CERTIFICATE', { x: width / 2 - 130, y: height - 160, size: 16, font: fontBold });
+  page.drawText('HOT DIP GALVANIZATION CERTIFICATE', { x: width / 2 - 110, y: height - 130, size: 14, font: fontBold });
   
-  // Issue Date
-  page.drawText(certData.issue_date, { x: 50, y: height - 190, size: 10, font: fontBold });
+  // Cert Reference & Date
+  page.drawText(`Cert. Ref. No.: ${certData.cert_id}`, { x: 50, y: height - 150, size: 9, font: fontRegular });
+  page.drawText(`Date: ${certData.issue_date}`, { x: 480, y: height - 150, size: 9, font: fontRegular });
 
   // Attestation
-  const rawClient = certData.client.trim();
   page.drawText(
-    `Mohammed Yehya Al-Aseery Factory For Metal Industries ( MYMAF ) certifies that the materials of ${rawClient} were`,
-    { x: 50, y: height - 230, size: 10, font: fontRegular }
+    `Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMAF) certifies that the materials of ${certData.client} were`,
+    { x: 50, y: height - 180, size: 9, font: fontRegular }
   );
-  page.drawText('hot dip galvanized in conformance to BS EN ISO 1461 Standard.', {
-    x: 50, y: height - 245, size: 10, font: fontRegular,
+  page.drawText('hot-dip galvanized in conformance with BS EN ISO 1461.', {
+    x: 50, y: height - 192, size: 9, font: fontRegular,
   });
 
   // Table
-  const tableY = height - 300;
-  const colX = [50, 120, 200, 450, 520, 580];
+  const tableY = height - 230;
+  const colX = [50, 110, 250, 450, 520];
   const rowH = 25;
   const headers = ['Item #', 'Site #', 'Description', 'Quantity', 'Unit'];
   headers.forEach((h, i) => {
-      page.drawText(h, { x: colX[i] + 5, y: tableY, size: 10, font: fontBold });
+      page.drawText(h, { x: colX[i] + 5, y: tableY, size: 9, font: fontBold });
   });
-  page.drawLine({ start: { x: 50, y: tableY - 5 }, end: { x: 580, y: tableY - 5 }, thickness: 1 });
+  page.drawLine({ start: { x: 50, y: tableY - 5 }, end: { x: 570, y: tableY - 5 }, thickness: 1 });
 
   const items = certData.line_items || [];
   items.forEach((item, i) => {
     const y = tableY - (i + 1) * rowH;
-    page.drawText(String(item.item_no), { x: colX[0] + 5, y, size: 10, font: fontRegular });
-    page.drawText(item.site_id, { x: colX[1] + 5, y, size: 10, font: fontRegular });
-    page.drawText(item.description, { x: colX[2] + 5, y, size: 10, font: fontRegular });
-    page.drawText(String(item.quantity), { x: colX[3] + 5, y, size: 10, font: fontRegular });
-    page.drawText(item.unit, { x: colX[4] + 5, y, size: 10, font: fontRegular });
+    page.drawText(String(item.item_no), { x: colX[0] + 5, y, size: 9, font: fontRegular });
+    page.drawText(item.site_id, { x: colX[1] + 5, y, size: 9, font: fontRegular });
+    page.drawText(item.description, { x: colX[2] + 5, y, size: 9, font: fontRegular });
+    page.drawText(String(item.quantity), { x: colX[3] + 5, y, size: 9, font: fontRegular });
+    page.drawText(item.unit, { x: colX[4] + 5, y, size: 9, font: fontRegular });
   });
-  // Footer
-  page.drawImage(signImage, { x: 50, y: 150, width: 100, height: 50 });
-  page.drawText('Adel Y. Aseery', { x: 50, y: 130, size: 10, font: fontRegular });
-  page.drawText('Quality Section Head', { x: 50, y: 115, size: 9, font: fontRegular });
   
-  page.drawImage(stampImage, { x: 300, y: 130, width: 120, height: 60 });
+  // Footer: Signature, Stamp, QR
+  page.drawText('Mohammed Yehya Al-Aseery Factory For Metal Industries', { x: 50, y: 250, size: 9, font: fontRegular });
+  page.drawText('MYMAF', { x: 50, y: 238, size: 9, font: fontRegular });
   
-  page.drawImage(qrImage, { x: 480, y: 130, width: 70, height: 70 });
+  page.drawImage(signImage, { x: 50, y: 190, width: 100, height: 40 });
+  page.drawText('Adel Y. Aseery', { x: 50, y: 175, size: 9, font: fontRegular });
+  page.drawText('Quality Section Head', { x: 50, y: 163, size: 8, font: fontRegular });
+  
+  page.drawImage(stampImage, { x: 250, y: 170, width: 100, height: 50 });
+  
+  page.drawImage(qrImage, { x: 480, y: 170, width: 70, height: 70 });
+
 
 
 
