@@ -262,20 +262,22 @@ function wrapText(text: string, font: any, size: number, maxWidth: number): stri
   items.forEach((item, i) => {
     const wrappedDescription = wrapText(item.description, fontRegular, 9, 190);
     const numLines = wrappedDescription.length;
-    const rowHeight = Math.max(25, numLines * 12);
+    const rowHeight = Math.max(25, numLines * 12 + 10);
     
     // Draw row rectangle
     page.drawRectangle({ x: tableX, y: currentY - rowHeight + 15, width: tableWidth, height: rowHeight, borderColor: rgb(0, 0, 0), borderWidth: 1 });
     
-    page.drawText(String(item.item_no), { x: colX[0], y: currentY - 5, size: 9, font: fontRegular });
-    page.drawText(item.site_id, { x: colX[1], y: currentY - 5, size: 9, font: fontRegular });
+    // Draw row content (centered vertically within row)
+    const textY = currentY + 5;
+    page.drawText(String(item.item_no), { x: colX[0], y: textY, size: 9, font: fontRegular });
+    page.drawText(item.site_id, { x: colX[1], y: textY, size: 9, font: fontRegular });
     
     wrappedDescription.forEach((line, lineIdx) => {
-       page.drawText(line, { x: colX[2], y: currentY - 5 - (lineIdx * 12), size: 9, font: fontRegular });
+       page.drawText(line, { x: colX[2], y: textY - (lineIdx * 12), size: 9, font: fontRegular });
     });
     
-    page.drawText(String(item.quantity), { x: colX[3], y: currentY - 5, size: 9, font: fontRegular });
-    page.drawText(item.unit, { x: colX[4], y: currentY - 5, size: 9, font: fontRegular });
+    page.drawText(String(item.quantity), { x: colX[3], y: textY, size: 9, font: fontRegular });
+    page.drawText(item.unit, { x: colX[4], y: textY, size: 9, font: fontRegular });
     
     currentY -= rowHeight;
   });
