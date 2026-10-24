@@ -187,8 +187,10 @@ export async function generateCertificatePDF(
 
   // --- PDF Content Drawing ---
   
+  // --- PDF Content Drawing ---
+  
   // Header Logo
-  page.drawImage(logoImage, { x: 230, y: height - 100, width: 120, height: 60 });
+  page.drawImage(logoImage, { x: 246, y: height - 100, width: 120, height: 60 });
   
   // English Header
   page.drawText('Mohammed Yehya Al-Aseery', { x: 50, y: height - 40, size: 9, font: fontBold });
@@ -196,14 +198,14 @@ export async function generateCertificatePDF(
   page.drawText('CR No: 1010997047', { x: 50, y: height - 64, size: 8, font: fontRegular });
   page.drawText('VAT No: 302154658900006', { x: 50, y: height - 76, size: 8, font: fontRegular });
   
-  // Arabic Header (simplified)
-  page.drawText('Factory Name in Arabic', { x: 450, y: height - 40, size: 9, font: fontRegular });
-  page.drawText('Industries', { x: 470, y: height - 52, size: 8, font: fontRegular });
-  page.drawText('CR: 1010997047', { x: 480, y: height - 64, size: 8, font: fontRegular });
-  page.drawText('VAT: 302154658900006', { x: 420, y: height - 76, size: 8, font: fontRegular });
+  // Arabic Header (Placeholder - needs proper font support for full Arabic)
+  page.drawText('مصنع محمد يحيى العسيري', { x: 440, y: height - 40, size: 9, font: fontRegular });
+  page.drawText('للصناعات المعدنية', { x: 470, y: height - 52, size: 8, font: fontRegular });
+  page.drawText('س.ت: 1010997047', { x: 480, y: height - 64, size: 8, font: fontRegular });
+  page.drawText('الرقم الضريبي: 302154658900006', { x: 430, y: height - 76, size: 8, font: fontRegular });
   
   // Title
-  page.drawText('HOT DIP GALVANIZATION CERTIFICATE', { x: width / 2 - 110, y: height - 130, size: 14, font: fontBold });
+  page.drawText('HOT DIP GALVANIZATION CERTIFICATE', { x: width / 2 - 130, y: height - 130, size: 14, font: fontBold });
   
   // Cert Reference & Date
   page.drawText(`Cert. Ref. No.: ${certData.cert_id}`, { x: 50, y: height - 150, size: 9, font: fontRegular });
@@ -211,7 +213,7 @@ export async function generateCertificatePDF(
 
   // Attestation
   page.drawText(
-    `Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMAF) certifies that the materials of ${certData.client} were`,
+    `Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMAF) certifies that the materials of M/S ${certData.client} were`,
     { x: 50, y: height - 180, size: 9, font: fontRegular }
   );
   page.drawText('hot-dip galvanized in conformance with BS EN ISO 1461.', {
@@ -220,35 +222,50 @@ export async function generateCertificatePDF(
 
   // Table
   const tableY = height - 230;
-  const colX = [50, 110, 250, 450, 520];
-  const rowH = 25;
+  const tableX = 50;
+  const tableWidth = 510;
+  
+  // Table headers
+  const colX = [tableX + 10, tableX + 80, tableX + 180, tableX + 380, tableX + 450];
   const headers = ['Item #', 'Site #', 'Description', 'Quantity', 'Unit'];
+  
+  // Draw header row
+  page.drawRectangle({ x: tableX, y: tableY - 15, width: tableWidth, height: 25, borderColor: rgb(0, 0, 0), borderWidth: 1 });
   headers.forEach((h, i) => {
-      page.drawText(h, { x: colX[i] + 5, y: tableY, size: 9, font: fontBold });
+      page.drawText(h, { x: colX[i], y: tableY - 8, size: 9, font: fontBold });
   });
-  page.drawLine({ start: { x: 50, y: tableY - 5 }, end: { x: 570, y: tableY - 5 }, thickness: 1 });
 
   const items = certData.line_items || [];
   items.forEach((item, i) => {
-    const y = tableY - (i + 1) * rowH;
-    page.drawText(String(item.item_no), { x: colX[0] + 5, y, size: 9, font: fontRegular });
-    page.drawText(item.site_id, { x: colX[1] + 5, y, size: 9, font: fontRegular });
-    page.drawText(item.description, { x: colX[2] + 5, y, size: 9, font: fontRegular });
-    page.drawText(String(item.quantity), { x: colX[3] + 5, y, size: 9, font: fontRegular });
-    page.drawText(item.unit, { x: colX[4] + 5, y, size: 9, font: fontRegular });
+    const y = tableY - 35 - (i * 25);
+    // Draw row rectangle
+    page.drawRectangle({ x: tableX, y: y - 10, width: tableWidth, height: 25, borderColor: rgb(0, 0, 0), borderWidth: 1 });
+    
+    page.drawText(String(item.item_no), { x: colX[0], y: y - 2, size: 9, font: fontRegular });
+    page.drawText(item.site_id, { x: colX[1], y: y - 2, size: 9, font: fontRegular });
+    page.drawText(item.description, { x: colX[2], y: y - 2, size: 9, font: fontRegular });
+    page.drawText(String(item.quantity), { x: colX[3], y: y - 2, size: 9, font: fontRegular });
+    page.drawText(item.unit, { x: colX[4], y: y - 2, size: 9, font: fontRegular });
   });
   
   // Footer: Signature, Stamp, QR
-  page.drawText('Mohammed Yehya Al-Aseery Factory For Metal Industries', { x: 50, y: 250, size: 9, font: fontRegular });
-  page.drawText('MYMAF', { x: 50, y: 238, size: 9, font: fontRegular });
+  page.drawText('Mohammed Yehya Al-Aseery Factory For Metal Industries', { x: 50, y: 280, size: 9, font: fontRegular });
+  page.drawText('MYMAF', { x: 50, y: 268, size: 9, font: fontRegular });
   
-  page.drawImage(signImage, { x: 50, y: 190, width: 100, height: 40 });
-  page.drawText('Adel Y. Aseery', { x: 50, y: 175, size: 9, font: fontRegular });
-  page.drawText('Quality Section Head', { x: 50, y: 163, size: 8, font: fontRegular });
+  page.drawImage(signImage, { x: 50, y: 220, width: 100, height: 40 });
+  page.drawText('Adel Y. Aseery', { x: 50, y: 205, size: 9, font: fontRegular });
+  page.drawText('Quality Section Head', { x: 50, y: 193, size: 8, font: fontRegular });
   
-  page.drawImage(stampImage, { x: 250, y: 170, width: 100, height: 50 });
+  page.drawImage(stampImage, { x: 250, y: 180, width: 140, height: 70 });
   
-  page.drawImage(qrImage, { x: 480, y: 170, width: 70, height: 70 });
+  page.drawImage(qrImage, { x: 480, y: 180, width: 70, height: 70 });
+  
+  // Bottom Address
+  page.drawText('Kingdom of Saudi Arabia', { x: 50, y: 50, size: 8, font: fontRegular });
+  page.drawText('P.O. Box: 370372, Riyadh 11325', { x: 50, y: 40, size: 8, font: fontRegular });
+  
+  page.drawText('المملكة العربية السعودية', { x: 440, y: 50, size: 8, font: fontRegular });
+  page.drawText('ص.ب: 370372، الرياض 11325', { x: 440, y: 40, size: 8, font: fontRegular });
 
 
 

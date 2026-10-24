@@ -18,6 +18,9 @@ import {
 } from 'lucide-react';
 import type { CertificateData } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
+import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
+import { generateCertificatePDF } from '../services/pdfEngine';
 
 interface CertificateLedgerProps {
   onSelectCertificate: (certId: string) => void;
@@ -40,6 +43,58 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
   const [filterClient, setFilterClient] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AUTHENTIC' | 'REVOKED'>('ALL');
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const toggleAll = () => {
+    if (selectedIds.length === filtered.length && filtered.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map((c) => c.cert_id));
+    }
+  };
+
+  const toggleSelect = (certId: string) => {
+    if (selectedIds.includes(certId)) {
+      setSelectedIds(selectedIds.filter((id) => id !== certId));
+    } else {
+      setSelectedIds([...selectedIds, certId]);
+    }
+  };
+
+  const handleExportExcel = () => {
+    const selectedCerts = certificates.filter((c) => selectedIds.includes(c.cert_id));
+    const data = selectedCerts.map((c) => ({
+      CertificateID: c.cert_id,
+      IssueDate: c.issue_date,
+      Client: c.client,
+      Project: c.project_name,
+      Status: c.status,
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Certificates');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `MYMF_Inspection_Ledger_Export_${timestamp}.xlsx`);
+  };
+
+  const handleDownloadZip = async () => {
+    const zip = new JSZip();
+    const selectedCerts = certificates.filter((c) => selectedIds.includes(c.cert_id));
+
+    for (const cert of selectedCerts) {
+      const { pdfBytes, fileName } = await generateCertificatePDF(cert);
+      zip.file(fileName, pdfBytes);
+    }
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = url;
+    const timestamp = new Date().toISOString().slice(0, 10);
+    a.download = `MYMF_Selected_Certificates_${timestamp}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -292,6 +347,22 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {selectedIds.length > 0 && (
+              <>
+                <button
+                  onClick={handleExportExcel}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                >
+                  Export ({selectedIds.length})
+                </button>
+                <button
+                  onClick={handleDownloadZip}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                >
+                  Download ZIP ({selectedIds.length})
+                </button>
+              </>
+            )}
             {onOpenBulk && (
               <button
                 onClick={onOpenBulk}
@@ -320,6 +391,13 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600 uppercase font-semibold text-[11px] border-b border-slate-200">
               <tr>
+                <th className="py-3 px-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === filtered.length && filtered.length > 0}
+                    onChange={toggleAll}
+                  />
+                </th>
                 <th className="py-3 px-4">Certificate ID</th>
                 <th className="py-3 px-4">Issue Date</th>
                 <th className="py-3 px-4">Client / Beneficiary</th>
@@ -353,13 +431,21 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
                 filtered.map((cert) => {
                   const isAuth = cert.status === 'AUTHENTIC_VERIFIED';
                   const sites = Array.from(new Set(cert.line_items?.map((i) => i.site_id) || []));
+                  const isSelected = selectedIds.includes(cert.cert_id);
 
                   return (
                     <tr
                       key={cert.cert_id}
-                      className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                      className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${isSelected ? 'bg-slate-50' : ''}`}
                       onClick={() => onSelectCertificate(cert.cert_id)}
                     >
+                      <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(cert.cert_id)}
+                        />
+                      </td>
                       <td className="py-3.5 px-4">
                         <div className="font-mono font-bold text-slate-900 text-xs flex items-center gap-1.5">
                           <span>{cert.cert_id}</span>
