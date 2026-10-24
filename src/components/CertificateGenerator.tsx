@@ -160,12 +160,20 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate certificate');
+      const responseText = await response.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.error("Raw Server Error Output:", responseText);
+        throw new Error(`Server returned non-JSON error (${response.status}): ${responseText.slice(0, 200)}`);
       }
 
-      const { sha256_hash, verification_url } = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || result.message || "Failed to generate certificate");
+      }
+
+      const { sha256_hash, verification_url } = result;
       payload.sha256_hash = sha256_hash;
       payload.verification_url = verification_url;
       

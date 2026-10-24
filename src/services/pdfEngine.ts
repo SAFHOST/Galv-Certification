@@ -22,7 +22,7 @@ export interface PDFGenerationResult {
 let globalBrowser: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
-  if (globalBrowser && globalBrowser.isConnected()) {
+  if (globalBrowser && globalBrowser.connected) {
     try {
       // Check if we can actually use the browser
       const pages = await globalBrowser.pages();
@@ -151,7 +151,7 @@ export async function generateCertificatePDF(
     await page.setDefaultTimeout(60000); 
     
     // Set content and wait for fonts to load properly
-    await page.setContent(html, { waitUntil: 'networkidle2' });
+    await page.setContent(html, { waitUntil: 'load' });
     
     // Force font loading check
     await page.evaluateHandle('document.fonts.ready');

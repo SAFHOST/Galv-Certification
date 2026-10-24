@@ -116,24 +116,17 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
         });
         
         if (!response.ok) {
+          const responseText = await response.text();
           let serverError = `Failed to generate PDF for ${certId}`;
           try {
-            const errorJson = await response.json();
-            if (errorJson.error) {
-              serverError = `Server Error [${certId}]: ${errorJson.error}`;
-            } else if (errorJson.message) {
-              serverError = `Server Error [${certId}]: ${errorJson.message}`;
-            }
+            const errorJson = JSON.parse(responseText);
+            serverError = `Server Error [${certId}]: ${errorJson.error || errorJson.message || 'Unknown error'}`;
           } catch {
-            // If not JSON, try to get text
-            try {
-              const errorText = await response.text();
-              if (errorText.includes('<!DOCTYPE html>')) {
-                serverError = `Critical: Server crashed while generating ${certId}. Please check server logs.`;
-              } else if (errorText) {
-                serverError = `Server Error [${certId}]: ${errorText.slice(0, 100)}`;
-              }
-            } catch {}
+            if (responseText.includes('<!DOCTYPE html>')) {
+              serverError = `Critical: Server crashed while generating ${certId}. Please check server logs.`;
+            } else {
+              serverError = `Server Error [${certId}] (${response.status}): ${responseText.slice(0, 150)}`;
+            }
           }
           throw new Error(serverError);
         }
