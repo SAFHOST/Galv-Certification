@@ -29,34 +29,10 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ certificate, i
 
     const loadPdf = async () => {
       try {
-        const response = await fetch('/api/certificates/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(certificate)
-        });
+        const { generateCertificatePDF } = await import('../services/pdfEngine');
+        const { pdfBytes } = await generateCertificatePDF(certificate);
         
-        if (!response.ok) {
-          const responseText = await response.text();
-          let msg = 'Failed to load PDF';
-          try {
-            const errJson = JSON.parse(responseText);
-            if (errJson.error === 'SERVERLESS_BOOT_CRASH') {
-              msg = `BOOT CRASH: ${errJson.message || 'Unknown crash'}${errJson.stack ? '\n' + errJson.stack.slice(0, 200) + '...' : ''}`;
-            } else if (errJson.error || errJson.message) {
-              msg = errJson.error || errJson.message;
-            }
-          } catch {
-            if (responseText.includes('<!DOCTYPE html>') || responseText.startsWith('A server error occurred')) {
-              msg = `Server Error (${response.status}): The PDF engine encountered an issue. Check server logs.`;
-            } else if (responseText) {
-              msg = responseText.slice(0, 200);
-            }
-          }
-          throw new Error(msg);
-        }
-
-        const bytes = await response.arrayBuffer();
-        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         if (isMounted) {
           setPdfBlobUrl(url);

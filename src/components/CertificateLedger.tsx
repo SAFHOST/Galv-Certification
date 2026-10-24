@@ -80,16 +80,15 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
     const zip = new JSZip();
     const selectedCerts = certificates.filter((c) => selectedIds.includes(c.cert_id));
 
+    const { generateCertificatePDF } = await import('../services/pdfEngine');
+
     for (const cert of selectedCerts) {
-      const response = await fetch('/api/certificates/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cert),
-      });
-      if (!response.ok) throw new Error(`Failed to generate PDF for ${cert.cert_id}`);
-      const pdfBytes = new Uint8Array(await response.arrayBuffer());
-      const fileName = `${cert.cert_id.replace(/[^a-zA-Z0-9-_]/g, '_')}_MYMF_Cert.pdf`;
-      zip.file(fileName, pdfBytes);
+      try {
+        const { pdfBytes, fileName } = await generateCertificatePDF(cert);
+        zip.file(fileName, pdfBytes);
+      } catch (err) {
+        console.error(`Failed to generate PDF for ${cert.cert_id}`, err);
+      }
     }
 
     const content = await zip.generateAsync({ type: 'blob' });

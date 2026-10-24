@@ -191,35 +191,24 @@ const VERIFY_COUNT_KEY = 'mymf_qc_verify_counts_v1';
 class CertificateRepository {
   private cache: Map<string, CertificateData> = new Map();
   private pdfCache: Map<string, Uint8Array> = new Map();
-  private verificationCounts: Map<string, number> = new Map();
   private initialized = false;
 
   private async initialize() {
     if (this.initialized) return;
 
     try {
+      const { collection, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      
       const certsRef = collection(db, 'certificates');
       const snapshot = await getDocs(certsRef);
-      if (snapshot.empty) {
-        // Seed if empty
-        for (const seed of INITIAL_SEEDS) {
-          const canonical = getCanonicalCertificatePayload(seed);
-          seed.sha256_hash = await generateSHA256Hash(canonical);
-          const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-          const base = process.env.APP_URL || (vercelHost ? `https://${vercelHost}` : 'https://certifficationsystem.vercel.app');
-          seed.verification_url = `${base.replace(/\/+$/, '')}/verify/${encodeURIComponent(seed.cert_id)}`;
-          await setDoc(doc(db, 'certificates', seed.cert_id), seed);
-          this.cache.set(seed.cert_id, seed);
-          this.verificationCounts.set(seed.cert_id, 3);
-        }
-      } else {
-        snapshot.forEach((doc) => {
-          const data = doc.data() as CertificateData;
-          this.cache.set(data.cert_id, data);
-        });
-      }
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data() as CertificateData;
+        this.cache.set(data.cert_id, data);
+      });
     } catch (e) {
-      console.warn('Failed to initialize all certificates from Firestore (possibly unauthenticated)', e);
+      console.warn('Failed to initialize certificates from Firestore:', e);
     }
 
     this.initialized = true;
@@ -228,16 +217,26 @@ class CertificateRepository {
   async getPDF(certId: string): Promise<Uint8Array> {
     await this.initialize();
     if (this.pdfCache.has(certId)) {
-        return this.pdfCache.get(certId)!;
+      return this.pdfCache.get(certId)!;
     }
-    // If not in cache, we might need to regenerate it or it's not stored in memory
-    // For now, throw an error if not in cache
-    throw new Error(`PDF for certificate ${certId} not found in memory`);
+    
+    // Regenerate PDF locally if not in cache
+    const cert = await this.getById(certId);
+    if (cert) {
+      const { generateCertificatePDF } = await import('./pdfEngine');
+      const { pdfBytes } = await generateCertificatePDF(cert);
+      this.pdfCache.set(certId, pdfBytes);
+      return pdfBytes;
+    }
+    
+    throw new Error(`Certificate ${certId} not found to generate PDF`);
   }
-
 
   async addAudit(certId: string, action: string, metadata: any = {}) {
     try {
+      const { collection, addDoc } = await import('firebase/firestore');
+      const { db, auth } = await import('../lib/firebase');
+      
       const auditRef = collection(db, 'certificates', certId, 'audit_trail');
       await addDoc(auditRef, {
         audit_id: crypto.randomUUID(),
@@ -254,24 +253,20 @@ class CertificateRepository {
 
   async getAll(): Promise<CertificateData[]> {
     await this.initialize();
-
-    // In browser, attempt to sync latest from server in background
-    if (typeof window !== 'undefined') {
-      try {
-        const resp = await fetch('/api/certificates');
-        if (resp.ok) {
-          const json = await resp.json();
-          if (json.success && Array.isArray(json.data)) {
-            for (const item of json.data) {
-              if (item && item.cert_id && !this.cache.has(item.cert_id)) {
-                this.cache.set(item.cert_id, item);
-              }
-            }
-          }
-        }
-      } catch {
-        // Fall back gracefully to cache
-      }
+    
+    // Refresh from Firestore
+    try {
+      const { collection, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      const certsRef = collection(db, 'certificates');
+      const snapshot = await getDocs(certsRef);
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data() as CertificateData;
+        this.cache.set(data.cert_id, data);
+      });
+    } catch (e) {
+      console.warn('Background sync failed:', e);
     }
 
     return Array.from(this.cache.values()).sort(
@@ -280,271 +275,78 @@ class CertificateRepository {
   }
 
   async getById(certId: string): Promise<CertificateData | undefined> {
-    await this.initialize();
     const cleanId = certId.trim();
+    
+    // Check cache first
+    const cached = this.cache.get(cleanId) || Array.from(this.cache.values()).find(c => c.cert_id.toLowerCase() === cleanId.toLowerCase());
+    if (cached) return cached;
 
-    // 1. Case-insensitive lookup in local cache
-    for (const [key, cert] of this.cache.entries()) {
-      if (key.toLowerCase() === cleanId.toLowerCase()) {
-        return cert;
+    // Query Firestore
+    try {
+      const { doc, getDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      const docRef = doc(db, 'certificates', cleanId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data() as CertificateData;
+        this.cache.set(data.cert_id, data);
+        return data;
       }
-    }
-
-    // 2. If not found in browser cache, query server API
-    if (typeof window !== 'undefined') {
-      try {
-        const resp = await fetch(`/api/certificates/${encodeURIComponent(cleanId)}`);
-        if (resp.ok) {
-          const json = await resp.json();
-          if (json.success && json.data) {
-            const cert = json.data as CertificateData;
-            this.cache.set(cert.cert_id, cert);
-            // No persistence needed, Firestore is source of truth
-
-            return cert;
-          }
-        }
-      } catch {
-        // Server unreachable
-      }
-    }
-
-    // 3. Fallback check for URL query params if this was an external QR scan
-    if (typeof window !== 'undefined' && window.location?.search) {
-      try {
-        const sp = new URLSearchParams(window.location.search);
-        if (sp.has('c')) {
-          const hydratedCert: CertificateData = {
-            cert_id: cleanId,
-            issue_date: sp.get('d') || '24 OCT 2026',
-            client: sp.get('c') || 'Materials of M/S GBH',
-            project_name: sp.get('p') || 'STC Telecom Site Extension Project - Northern Cluster',
-            purchase_order_no: sp.get('po') || 'PO-2026-GBH-8821',
-            delivery_note_no: sp.get('dn') || 'DN-25-8821',
-            status: 'AUTHENTIC_VERIFIED',
-            organization: {
-              name: 'Mohammed Yehya Al-Aseery For Metal Industries (MYMF)',
-              name_ar: 'مصنع محمد يحيى العسيري للصناعات المعدنية',
-              cr_number: '1010207045',
-              vat_number: '302154658900006',
-              address: 'PO Box 370372, Riyadh 11325, KSA',
-              tel: '+966 11 498 2211',
-              email: 'qc@mymf.com.sa',
-              website: 'www.mymf.com.sa',
-              accreditation: 'ISO 9001:2015 & BS EN ISO 1461 Certified Facility',
-            },
-            technical_params: {
-              standard: 'BS EN ISO 1461',
-              standard_title: 'Hot dip galvanized coatings on fabricated iron and steel articles',
-              bath_temperature_c: 450,
-              zinc_purity_percent: 99.995,
-              min_required_dft_um: 85,
-              flux_type: 'Triple Salt Zinc Ammonium Chloride',
-              pre_treatment: 'Caustic Degreasing, Hydrochloric Acid Pickling & Pre-fluxing',
-              passivation: 'Sodium Dichromate Quench Passivation',
-            },
-            line_items: [
-              {
-                item_no: 1,
-                site_id: sp.get('s') || 'ZUL033',
-                description: sp.get('desc') || 'RF Extension Mount with all accessories',
-                quantity: Number(sp.get('q')) || 2,
-                unit: sp.get('u') || '3M',
-                heat_number: 'HT-48901',
-                measured_dft_um: Number(sp.get('dft')) || 91.5,
-                visual_inspection: 'PASS',
-              },
-            ],
-            sign_off: {
-              name: 'Adel Y. Aseery',
-              role: 'Quality Section Head',
-              department: 'QA/QC Inspection Department',
-              signed_at: new Date().toISOString(),
-              signature_id: 'MYMF-SIG-AYA-0881',
-            },
-            notes: 'Certified that the materials listed have been hot-dip galvanized in strict compliance with BS EN ISO 1461 standard specifications. All visual and thickness inspections conform to QA/QC acceptance criteria.',
-            created_at: new Date().toISOString(),
-            verification_url: `${window.location.origin}/verify/${encodeURIComponent(cleanId)}`,
-            sha256_hash: '',
-            verification_count: 0,
-          };
-          const can = getCanonicalCertificatePayload(hydratedCert);
-          hydratedCert.sha256_hash = await generateSHA256Hash(can);
-          this.cache.set(hydratedCert.cert_id, hydratedCert);
-          // No persistence needed
-
-          return hydratedCert;
-        }
-      } catch {}
-    }
-
-    // 4. Fallback for valid standard MYMF references (e.g. MYF-QC-26-239)
-    if (cleanId.toUpperCase().startsWith('MYF-QC-')) {
-      for (const seed of INITIAL_SEEDS) {
-        if (seed.cert_id.toLowerCase() === cleanId.toLowerCase()) {
-          this.cache.set(seed.cert_id, seed);
-          // No persistence needed
-
-          return seed;
-        }
-      }
+    } catch (e) {
+      console.error('Error fetching certificate from Firestore:', e);
     }
 
     return undefined;
   }
 
   async save(cert: CertificateData, pdfBytes?: Uint8Array): Promise<StorageResult> {
-    await this.initialize();
-
-    // Always ensure verification_url matches the actual cert_id and current origin
-    if (typeof window !== 'undefined' && window.location?.origin) {
+    // 1. Metadata setup
+    if (typeof window !== 'undefined') {
       cert.verification_url = `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`;
-    } else {
-      const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-      const base = process.env.APP_URL || (vercelHost ? `https://${vercelHost}` : 'https://certifficationsystem.vercel.app');
-      cert.verification_url = `${base.replace(/\/+$/, '')}/verify/${encodeURIComponent(cert.cert_id)}`;
     }
-
-    // Calculate canonical hash
+    
     const canonical = getCanonicalCertificatePayload(cert);
     cert.sha256_hash = await generateSHA256Hash(canonical);
+    cert.status = 'AUTHENTIC_VERIFIED';
+    
+    if (!cert.created_at) cert.created_at = new Date().toISOString();
 
-    // Google Drive / Cloud Storage deterministic path & naming
-    const sanitizedId = cert.cert_id.replace(/[^a-zA-Z0-9-_]/g, '_');
-    const fileName = `${sanitizedId}_Galv_Cert.pdf`;
-    const driveDocId = `1mymf_${sanitizedId.toLowerCase()}_prod_doc`;
-    const deterministicStorageUrl = `https://drive.google.com/file/d/${driveDocId}/view?usp=sharing`;
-
-    if (!cert.storage_url) {
-      cert.storage_url = deterministicStorageUrl;
-    }
-
-    cert.audit_trail = {
-      issuance_ip: '10.14.88.22',
-      terminal_id: 'MYMF-QC-TERM-01',
-      location: 'Riyadh Industrial Plant, KSA (24.7136° N, 46.6753° E)',
-      issued_at: new Date().toISOString(),
-      issued_by: 'Adel Y. Aseery (QA/QC Section Head)',
-      signature_id: 'MYMF-SIG-AYA-0881',
-      user_agent: 'MYMF-QC-Inspection-Station/2.4 (Strict Audit Mode)',
-      status: 'AUTHORIZED_SECURE',
-      trap_nonce: `TRAP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
-    };
-    this.cache.set(cert.cert_id, cert);
+    // 2. Save to Firestore
+    const { doc, setDoc } = await import('firebase/firestore');
+    const { db } = await import('../lib/firebase');
     await setDoc(doc(db, 'certificates', cert.cert_id), cert);
+    
+    this.cache.set(cert.cert_id, cert);
+    if (pdfBytes) this.pdfCache.set(cert.cert_id, pdfBytes);
+
     await this.addAudit(cert.cert_id, 'CERTIFICATE_ISSUED', { client: cert.client });
 
-    if (pdfBytes) {
-      this.pdfCache.set(cert.cert_id, pdfBytes);
-    }
-
-    // Await sync to server API
-    if (typeof window !== 'undefined') {
-      try {
-        await fetch('/api/certificates/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cert),
-        });
-      } catch {
-        // Offline / fallback
-      }
-    }
-
     return {
-      provider: 'google_drive',
+      provider: 'firebase',
       cert_id: cert.cert_id,
-      file_name: fileName,
-      file_size_bytes: pdfBytes ? pdfBytes.byteLength : 84200,
+      file_name: `${cert.cert_id}_Galv_Cert.pdf`,
+      file_size_bytes: pdfBytes ? pdfBytes.byteLength : 0,
       mime_type: 'application/pdf',
-      storage_url: cert.storage_url,
-      public_view_link: cert.storage_url,
+      storage_url: cert.verification_url || '',
+      public_view_link: cert.verification_url || '',
       stored_at: new Date().toISOString(),
     };
   }
 
   async saveBulk(certs: CertificateData[], pdfMap?: Map<string, Uint8Array>): Promise<number> {
-    await this.initialize();
     for (const cert of certs) {
-      if (typeof window !== 'undefined' && window.location?.origin) {
-        cert.verification_url = `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`;
-      }
-      
-      const canonical = getCanonicalCertificatePayload(cert);
-      cert.sha256_hash = await generateSHA256Hash(canonical);
-
-      const sanitizedId = cert.cert_id.replace(/[^a-zA-Z0-9-_]/g, '_');
-      const driveDocId = `1mymf_${sanitizedId.toLowerCase()}_prod_doc`;
-      cert.storage_url = `https://drive.google.com/file/d/${driveDocId}/view?usp=sharing`;
-
-      cert.audit_trail = {
-        issuance_ip: '10.14.88.22',
-        terminal_id: 'MYMF-QC-TERM-01',
-        location: 'Riyadh Industrial Plant, KSA (24.7136° N, 46.6753° E)',
-        issued_at: new Date().toISOString(),
-        issued_by: 'Adel Y. Aseery (QA/QC Section Head)',
-        signature_id: 'MYMF-SIG-AYA-0881',
-        user_agent: 'MYMF-QC-Inspection-Station/2.4 (Strict Audit Mode)',
-        status: 'AUTHORIZED_SECURE',
-        trap_nonce: `TRAP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
-      };
-
-      this.cache.set(cert.cert_id, cert);
-      if (pdfMap && pdfMap.has(cert.cert_id)) {
-        this.pdfCache.set(cert.cert_id, pdfMap.get(cert.cert_id)!);
-      }
-      
-      try {
-        await setDoc(doc(db, 'certificates', cert.cert_id), cert);
-        await this.addAudit(cert.cert_id, 'CERTIFICATE_ISSUED_BULC', { client: cert.client });
-      } catch (e) {
-        console.error(`Failed to persist ${cert.cert_id} to Firestore`, e);
-      }
-    }
-
-    // Sync all in bulk to server if called from browser
-    if (typeof window !== 'undefined') {
-      try {
-        await fetch('/api/certificates/bulk-save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(certs),
-        });
-      } catch {
-        // Local persistence still succeeded
-      }
+      await this.save(cert, pdfMap?.get(cert.cert_id));
     }
 
     return certs.length;
   }
 
-
   async verify(certId: string): Promise<VerificationResult> {
-    await this.initialize();
-    let cert = await this.getById(certId);
-
-    // If not found in local cache, try querying the verification API (e.g. mobile phone scanner)
-    if (!cert && typeof window !== 'undefined') {
-      try {
-        const resp = await fetch(`/api/verify/${encodeURIComponent(certId.trim())}`);
-        if (resp.ok) {
-          const json = await resp.json();
-          if (json.success && json.verification) {
-            if (json.verification.certificate) {
-              this.cache.set(json.verification.certificate.cert_id, json.verification.certificate);
-              // No persistence needed
-
-            }
-            return json.verification;
-          }
-        }
-      } catch {
-        // Fall back to local check
-      }
-    }
+    const cert = await this.getById(certId);
 
     if (!cert) {
-      await this.addAudit(certId, 'VERIFICATION_ATTEMPT', { status: 'NOT_FOUND', ip: 'unknown' });
+      await this.addAudit(certId, 'VERIFICATION_ATTEMPT', { status: 'NOT_FOUND' });
       return {
         cert_id: certId,
         is_valid: false,
@@ -556,13 +358,16 @@ class CertificateRepository {
       };
     }
 
-    // Increment scan count
-    const currentCount = (cert.verification_count || 0) + 1;
-    cert.verification_count = currentCount;
-    await updateDoc(doc(db, 'certificates', cert.cert_id), { verification_count: currentCount });
+    // Update scan count
+    const newCount = (cert.verification_count || 0) + 1;
+    const { doc, updateDoc } = await import('firebase/firestore');
+    const { db } = await import('../lib/firebase');
+    
+    await updateDoc(doc(db, 'certificates', cert.cert_id), { verification_count: newCount });
+    cert.verification_count = newCount;
     this.cache.set(cert.cert_id, cert);
 
-    await this.addAudit(certId, 'VERIFICATION_ATTEMPT', { status: 'SUCCESS', count: currentCount });
+    await this.addAudit(cert.cert_id, 'VERIFICATION_ATTEMPT', { status: 'SUCCESS', count: newCount });
 
     if (cert.status === 'REVOKED') {
       return {
@@ -573,48 +378,37 @@ class CertificateRepository {
         status_description: 'This inspection certificate has been formally revoked by MYMF Quality Section.',
         certificate: cert,
         verified_at: new Date().toISOString(),
-        verification_count: currentCount,
+        verification_count: newCount,
       };
     }
 
-    // Check cryptographic integrity
     const integrity = await verifyCertificateIntegrity(cert);
-    if (!integrity.isValid) {
-      await this.addAudit(certId, 'VERIFICATION_ATTEMPT', { status: 'TAMPERED_DETECTED' });
-      return {
-        cert_id: cert.cert_id,
-        is_valid: false,
-        status: 'TAMPERED',
-        status_title: 'Cryptographic Hash Mismatch (Tamper Detected)',
-        status_description: 'The document data does not match the original digital fingerprint signed by QA/QC Head.',
-        certificate: cert,
-        calculated_hash: integrity.computedHash,
-        recorded_hash: integrity.expectedHash,
-        verified_at: new Date().toISOString(),
-        verification_count: currentCount,
-      };
-    }
-
     return {
       cert_id: cert.cert_id,
-      is_valid: true,
-      status: 'AUTHENTIC',
-      status_title: 'VERIFIED & AUTHENTIC',
-      status_description: 'Official Hot-Dip Galvanization Inspection Certificate conforms to BS EN ISO 1461.',
+      is_valid: integrity.isValid,
+      status: integrity.isValid ? 'AUTHENTIC' : 'TAMPERED',
+      status_title: integrity.isValid ? 'VERIFIED & AUTHENTIC' : 'Tamper Detected',
+      status_description: integrity.isValid 
+        ? 'Official Hot-Dip Galvanization Inspection Certificate conforms to BS EN ISO 1461.'
+        : 'The document data does not match the original digital fingerprint.',
       certificate: cert,
       calculated_hash: integrity.computedHash,
       recorded_hash: integrity.expectedHash,
       verified_at: new Date().toISOString(),
-      verification_count: currentCount,
+      verification_count: newCount,
     };
   }
 
   async toggleRevocation(certId: string): Promise<CertificateData | undefined> {
     const cert = await this.getById(certId);
     if (!cert) return undefined;
+    
     cert.status = cert.status === 'REVOKED' ? 'AUTHENTIC_VERIFIED' : 'REVOKED';
-    this.cache.set(cert.cert_id, cert);
+    const { doc, updateDoc } = await import('firebase/firestore');
+    const { db } = await import('../lib/firebase');
+    
     await updateDoc(doc(db, 'certificates', cert.cert_id), { status: cert.status });
+    this.cache.set(cert.cert_id, cert);
 
     return cert;
   }
@@ -622,13 +416,16 @@ class CertificateRepository {
   async tamperTest(certId: string): Promise<CertificateData | undefined> {
     const cert = await this.getById(certId);
     if (!cert) return undefined;
-    // Alter item quantity without updating recorded hash to demonstrate tamper alert
+    
     if (cert.line_items.length > 0) {
       cert.line_items[0].quantity += 100;
       cert.line_items[0].description += ' [TAMPERED FOR DEMO]';
     }
-    this.cache.set(cert.cert_id, cert);
+    
+    const { doc, updateDoc } = await import('firebase/firestore');
+    const { db } = await import('../lib/firebase');
     await updateDoc(doc(db, 'certificates', cert.cert_id), { line_items: cert.line_items });
+    this.cache.set(cert.cert_id, cert);
 
     return cert;
   }
@@ -636,12 +433,7 @@ class CertificateRepository {
   async resetToOriginal(): Promise<void> {
     this.cache.clear();
     this.pdfCache.clear();
-    this.verificationCounts.clear();
     this.initialized = false;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem(STORAGE_KEY);
-      window.localStorage.removeItem(VERIFY_COUNT_KEY);
-    }
     await this.initialize();
   }
 }

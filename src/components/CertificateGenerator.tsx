@@ -4,6 +4,7 @@ import type { CertificateData, LineItem } from '../types/certificate';
 import { CertificateDataSchema } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
 import QRCode from 'qrcode';
+import { generateCertificatePDF } from '../services/pdfEngine';
 interface CertificateGeneratorProps {
   onCertificateCreated: (certId: string) => void;
   onPreviewPDF: (cert: CertificateData) => void;
@@ -153,46 +154,39 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({
         return;
       }
 
-      // Step 3 & 4: Server-side PDF generation
-      const response = await fetch('/api/certificates/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const responseText = await response.text();
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        console.error("Raw Server Error Output:", responseText);
-        throw new Error(`Server returned non-JSON error (${response.status}): ${responseText.slice(0, 200)}`);
-      }
-
-      if (!response.ok) {
-        // Extract the exact boot error message or standard error
-        const detailedError = result.message || result.details || result.error || 'Server error';
-        if (result.error === 'SERVERLESS_BOOT_CRASH') {
-          throw new Error(`BOOT CRASH: ${detailedError}${result.stack ? '\n' + result.stack.slice(0, 300) + '...' : ''}`);
-        }
-        throw new Error(`${result.error || 'Error'}: ${detailedError}`);
-      }
-
-      const { sha256_hash, verification_url } = result;
-      payload.sha256_hash = sha256_hash;
-      payload.verification_url = verification_url;
+      // 1. Generate PDF locally
+      const { pdfBytes, sha256Hash, verificationUrl, fileName } = await generateCertificatePDF(payload);
       
-      // Need QR code for preview
-      const qrDataUrl = await QRCode.toDataURL(verification_url, { errorCorrectionLevel: 'H', margin: 0, width: 280 });
+      // 2. Update payload with generated metadata
+      payload.sha256_hash = sha256Hash;
+      payload.verification_url = verificationUrl;
+      payload.status = 'AUTHENTIC_VERIFIED';
+      
+      // 3. Save directly to Firestore
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      await setDoc(doc(db, 'certificates', payload.cert_id), payload);
 
+      // 4. Trigger Download
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      // 5. Notify parent/success
+      onCertificateCreated(payload.cert_id);
+      
       setPreviewData({
-        qrDataUrl: qrDataUrl,
-        sha256Hash: sha256_hash,
-        verificationUrl: verification_url,
+        qrDataUrl: await QRCode.toDataURL(verificationUrl),
+        sha256Hash: sha256Hash,
+        verificationUrl: verificationUrl,
       });
 
-      // Navigate to field verification
-      onCertificateCreated(payload.cert_id);
     } catch (err: any) {
       console.error('Error generating certificate', err);
       setValidationErrors([err.message || 'An unexpected error occurred during PDF compilation']);

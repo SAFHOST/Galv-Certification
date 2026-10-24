@@ -109,33 +109,12 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
           }
         } as CertificateData;
 
-        const response = await fetch('/api/certificates/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(certPayload),
-        });
-        
-        if (!response.ok) {
-          const responseText = await response.text();
-          let serverError = `Failed to generate PDF for ${certId}`;
-          try {
-            const errorJson = JSON.parse(responseText);
-            serverError = `Server Error [${certId}]: ${errorJson.error || errorJson.message || 'Unknown error'}`;
-          } catch {
-            if (responseText.includes('<!DOCTYPE html>')) {
-              serverError = `Critical: Server crashed while generating ${certId}. Please check server logs.`;
-            } else {
-              serverError = `Server Error [${certId}] (${response.status}): ${responseText.slice(0, 150)}`;
-            }
-          }
-          throw new Error(serverError);
-        }
-        
-        const pdfBytes = new Uint8Array(await response.arrayBuffer());
+        const { generateCertificatePDF } = await import('../services/pdfEngine');
+        const { pdfBytes, fileName } = await generateCertificatePDF(certPayload);
 
         createdCerts.push(certPayload);
         pdfBytesMap.set(certId, pdfBytes);
-        zip.file(`${certId}_Site_${siteId}_Galv_Cert.pdf`, pdfBytes);
+        zip.file(fileName, pdfBytes);
       }
 
       await certificateRepository.saveBulk(createdCerts, pdfBytesMap);
