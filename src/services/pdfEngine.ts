@@ -174,81 +174,66 @@ export async function generateCertificatePDF(
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // Embed dynamic QR Code
-  const qrImage = await pdfDoc.embedPng(qrImageBytes);
-
-  // Embed Stamp and Signature assets
+  // Load assets
+  const logoImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.logoJpgBase64); // Added logo asset
+  const logoImage = await pdfDoc.embedJpg(logoImageBytes);
   const stampImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.stampJpgBase64);
   const stampImage = await pdfDoc.embedJpg(stampImageBytes);
   const signImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.signatureJpgBase64);
   const signImage = await pdfDoc.embedJpg(signImageBytes);
 
+  // --- PDF Content Drawing ---
+  
   // Header Logo and Info
-  page.drawText('Mohammed Yehya Al-Aseery', { x: 50, y: height - 80, size: 12, font: fontBold });
-  page.drawText('For Metal Industries', { x: 50, y: height - 95, size: 10, font: fontRegular });
-  page.drawText('CR NO: 1010207045', { x: 50, y: height - 110, size: 9, font: fontRegular });
+  page.drawImage(logoImage, { x: 230, y: height - 120, width: 150, height: 80 });
+  page.drawText('Mohammed Yehya Al-Aseery', { x: 50, y: height - 50, size: 10, font: fontBold });
+  page.drawText('For Metal Industries', { x: 50, y: height - 65, size: 9, font: fontRegular });
+  page.drawText('CR NO: 1010207045', { x: 50, y: height - 80, size: 9, font: fontRegular });
   
   // Title
-  page.drawText('CERTIFICATE', { x: width / 2 - 50, y: height - 150, size: 18, font: fontBold });
-  page.drawText('HOT-DIP-GALVANIZATION', { x: width / 2 - 65, y: height - 170, size: 12, font: fontRegular });
+  page.drawText('HOT DIP GALVANIZATION CERTIFICATE', { x: width / 2 - 130, y: height - 160, size: 16, font: fontBold });
   
   // Issue Date
-  page.drawText(`Date: ${certData.issue_date}`, { x: 50, y: height - 200, size: 10, font: fontBold, color: rgb(0.6, 0, 0) });
+  page.drawText(certData.issue_date, { x: 50, y: height - 190, size: 10, font: fontBold });
 
-  // 3. Dynamic Attestation Paragraph
+  // Attestation
   const rawClient = certData.client.trim();
-  const clientFormatted = rawClient.toLowerCase().startsWith('materials of')
-    ? rawClient
-    : `materials of ${rawClient}`;
-
   page.drawText(
-    `Mohammed Yehya Al-Aseery Factory For Metal Industries ( MYMF ) certifies that ${clientFormatted}, were`,
-    {
-      x: 50,
-      y: height - 230,
-      size: 10,
-      font: fontRegular,
-    }
+    `Mohammed Yehya Al-Aseery Factory For Metal Industries ( MYMAF ) certifies that the materials of ${rawClient} were`,
+    { x: 50, y: height - 230, size: 10, font: fontRegular }
   );
   page.drawText('hot dip galvanized in conformance to BS EN ISO 1461 Standard.', {
-    x: 50,
-    y: height - 245,
-    size: 10,
-    font: fontRegular,
+    x: 50, y: height - 245, size: 10, font: fontRegular,
   });
 
-  // 4. Dynamic Line Items Table
-  const tableX = 50;
-  const startY = height - 280;
-  const rowH = 25;
+  // Table
+  const tableY = height - 300;
   const colX = [50, 120, 200, 450, 520, 580];
-
-  // Table Headers
+  const rowH = 25;
   const headers = ['Item #', 'Site #', 'Description', 'Quantity', 'Unit'];
   headers.forEach((h, i) => {
-      page.drawText(h, { x: colX[i] + 5, y: startY, size: 10, font: fontBold });
+      page.drawText(h, { x: colX[i] + 5, y: tableY, size: 10, font: fontBold });
   });
-  page.drawLine({ start: { x: tableX, y: startY - 5 }, end: { x: 580, y: startY - 5 }, thickness: 1 });
+  page.drawLine({ start: { x: 50, y: tableY - 5 }, end: { x: 580, y: tableY - 5 }, thickness: 1 });
 
-  // Table Rows
   const items = certData.line_items || [];
   items.forEach((item, i) => {
-    const y = startY - (i + 1) * rowH;
+    const y = tableY - (i + 1) * rowH;
     page.drawText(String(item.item_no), { x: colX[0] + 5, y, size: 10, font: fontRegular });
     page.drawText(item.site_id, { x: colX[1] + 5, y, size: 10, font: fontRegular });
     page.drawText(item.description, { x: colX[2] + 5, y, size: 10, font: fontRegular });
     page.drawText(String(item.quantity), { x: colX[3] + 5, y, size: 10, font: fontRegular });
     page.drawText(item.unit, { x: colX[4] + 5, y, size: 10, font: fontRegular });
   });
-
-  // Footer area (Signature, Stamp, QR)
+  // Footer
   page.drawImage(signImage, { x: 50, y: 150, width: 100, height: 50 });
-  page.drawText(certData.sign_off?.name || 'Adel Y.Aseery', { x: 50, y: 130, size: 10, font: fontRegular });
+  page.drawText('Adel Y. Aseery', { x: 50, y: 130, size: 10, font: fontRegular });
+  page.drawText('Quality Section Head', { x: 50, y: 115, size: 9, font: fontRegular });
   
-  page.drawImage(stampImage, { x: 250, y: 120, width: 100, height: 100 });
+  page.drawImage(stampImage, { x: 300, y: 130, width: 120, height: 60 });
   
-  page.drawImage(qrImage, { x: 450, y: 120, width: 80, height: 80 });
-  page.drawText('SCAN TO VERIFY', { x: 450, y: 105, size: 8, font: fontRegular });
+  page.drawImage(qrImage, { x: 480, y: 130, width: 70, height: 70 });
+
 
 
   const pdfBytes = await pdfDoc.save();
