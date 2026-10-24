@@ -146,14 +146,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 Certificate Preview
               </button>
-              <button
-                onClick={() => onSelectTab('architecture')}
-                className={`hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  activeTab === 'architecture' ? 'text-slate-900 font-semibold border-b-2 border-slate-900 py-5 -mb-[2px]' : ''
-                }`}
-              >
-                System Architecture
-              </button>
             </nav>
           ) : (
             <div className="hidden md:flex items-center gap-2 text-xs text-slate-500">
@@ -233,13 +225,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`whitespace-nowrap shrink-0 py-1 ${activeTab === 'bulk' ? 'text-slate-900 font-bold' : ''}`}
             >
               Bulk Excel (ZIP)
-            </button>
-            <span className="text-slate-300">·</span>
-            <button
-              onClick={() => onSelectTab('architecture')}
-              className={`whitespace-nowrap shrink-0 py-1 ${activeTab === 'architecture' ? 'text-slate-900 font-bold' : ''}`}
-            >
-              Architecture
             </button>
             <span className="text-slate-300">·</span>
             <button

@@ -7,7 +7,6 @@ import { CertificateLedger } from './components/CertificateLedger';
 import { CertificateGenerator } from './components/CertificateGenerator';
 import { BulkCertificateGenerator } from './components/BulkCertificateGenerator';
 import { VerificationPortal } from './components/VerificationPortal';
-import { ArchitectureDiagram } from './components/ArchitectureDiagram';
 import { StaffLogin } from './components/StaffLogin';
 import { QRScannerModal } from './components/QRScannerModal';
 import { QRDisplayModal } from './components/QRDisplayModal';
@@ -206,8 +205,6 @@ export default function App() {
                 onPreviewPDF={handleOpenPdf}
               />
             )}
-
-            {activeTab === 'architecture' && <ArchitectureDiagram />}
           </>
         )}
       </main>
@@ -222,17 +219,6 @@ export default function App() {
             <span>BS EN ISO 1461 Standard</span>
             <span>·</span>
             <span>PO Box 370372, Riyadh 11325, KSA</span>
-            {!isAuthenticated && isPublicVerificationMode && (
-              <>
-                <span>·</span>
-                <button
-                  onClick={() => navigateToTab('login')}
-                  className="text-slate-500 hover:text-slate-800 underline cursor-pointer"
-                >
-                  Staff Login
-                </button>
-              </>
-            )}
           </div>
         </div>
       </footer>
