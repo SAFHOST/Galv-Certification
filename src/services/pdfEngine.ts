@@ -174,8 +174,11 @@ export async function generateCertificatePDF(
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+  // Embed dynamic QR Code
+  const qrImage = await pdfDoc.embedPng(qrImageBytes);
+
   // Load assets
-  const logoImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.logoJpgBase64); // Added logo asset
+  const logoImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.logoJpgBase64);
   const logoImage = await pdfDoc.embedJpg(logoImageBytes);
   const stampImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.stampJpgBase64);
   const stampImage = await pdfDoc.embedJpg(stampImageBytes);
