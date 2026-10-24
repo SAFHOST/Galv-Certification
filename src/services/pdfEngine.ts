@@ -1,15 +1,9 @@
 import puppeteer, { Browser } from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import QRCode from 'qrcode';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import type { CertificateData } from '../types/certificate';
 import { generateSHA256Hash, getCanonicalCertificatePayload } from './security';
-import { TEMPLATE_ASSETS } from './templateAssets';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { PDF_ASSETS, CERTIFICATE_TEMPLATE } from './pdfAssets';
 
 export interface PDFGenerationResult {
   pdfBytes: Uint8Array;
@@ -35,21 +29,27 @@ async function getBrowser(): Promise<Browser> {
   }
   
   const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
-  console.log(`[PDF Engine] Launching Puppeteer (Production: ${isProduction})...`);
+  console.log(`[PDF Engine] Launching Puppeteer (Production: \${isProduction})...`);
   
   try {
     const launchOptions: any = {
-      args: isProduction ? chromium.args : [
+      args: isProduction ? [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--single-process'
+      ] : [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu'
       ],
-      defaultViewport: chromium.defaultViewport,
+      defaultViewport: (chromium as any).defaultViewport,
       executablePath: isProduction 
-        ? await chromium.executablePath() 
+        ? await (chromium as any).executablePath() 
         : (process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'),
-      headless: isProduction ? chromium.headless : true,
+      headless: isProduction ? (chromium as any).headless : true,
       ignoreHTTPSErrors: true,
     };
 
@@ -57,171 +57,85 @@ async function getBrowser(): Promise<Browser> {
     return globalBrowser;
   } catch (err: any) {
     console.error('[PDF Engine] Puppeteer Launch Error:', err);
-    throw new Error(`PDF Engine Init Failed: ${err.message || 'Check environment dependencies'}`);
+    throw new Error(`PDF Engine Init Failed: \${err.message || 'Check environment dependencies'}`);
   }
-}
-
-export function buildVerificationUrl(cert: CertificateData | string, customDomain?: string): string {
-  const certId = typeof cert === 'string' ? cert : cert.cert_id;
-  const cleanId = encodeURIComponent(certId.trim());
-  let base = customDomain?.trim().replace(/\/+$/, '') || 'http://localhost:3000';
-  const targetUrl = `${base}/verify/${cleanId}`;
-  if (typeof cert === 'object' && cert.client) {
-    const firstItem = cert.line_items?.[0];
-    const params = new URLSearchParams({
-      c: cert.client,
-      s: firstItem?.site_id || '',
-      desc: firstItem?.description || '',
-      q: String(firstItem?.quantity || 1),
-      u: firstItem?.unit || '3M',
-      dft: String(firstItem?.measured_dft_um || 91.5),
-      d: cert.issue_date,
-      p: cert.project_name || '',
-      po: cert.purchase_order_no || '',
-      dn: cert.delivery_note_no || '',
-      h: cert.sha256_hash || '',
-      v: cert.status === 'REVOKED' ? 'REVOKED' : 'PASS',
-    });
-    return `${targetUrl}?${params.toString()}`;
-  }
-  return targetUrl;
 }
 
 export async function generateQRCodeDataUrl(text: string): Promise<string> {
-  return QRCode.toDataURL(text, { errorCorrectionLevel: 'H', margin: 0, width: 280, color: { dark: '#000000', light: '#ffffff' } });
+  return QRCode.toDataURL(text, { 
+    errorCorrectionLevel: 'H', 
+    margin: 0, 
+    width: 280, 
+    color: { dark: '#000000', light: '#ffffff' } 
+  });
 }
 
 export async function generateCertificatePDF(
   certData: CertificateData,
   options?: { hostDomain?: string }
 ): Promise<PDFGenerationResult> {
-  const host = options?.hostDomain || 'http://localhost:3000';
-  const verificationUrl = `${host}/verify/${encodeURIComponent(certData.cert_id.trim())}`;
-  certData.verification_url = verificationUrl;
+  const host = options?.hostDomain || 'https://mymf-portal.vercel.app'; // Default to production domain
+  const verificationUrl = `\${host}/verify/\${encodeURIComponent(certData.cert_id.trim())}`;
   
   const canonicalPayload = getCanonicalCertificatePayload(certData);
   const sha256Hash = certData.sha256_hash || (await generateSHA256Hash(canonicalPayload));
-  const qrDataUrl = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'H', margin: 0, width: 280 });
+  const qrCodeUrl = await generateQRCodeDataUrl(verificationUrl);
   
-  // Read template and assets
-  const logoPath = TEMPLATE_ASSETS.logoPath;
-  const signaturePath = TEMPLATE_ASSETS.signaturePath;
-  const stampPath = TEMPLATE_ASSETS.stampPath;
-  
-  // Use process.cwd() for reliable paths across environments
-  const rootDir = process.cwd();
-  const templatePath = path.join(rootDir, 'src/templates/certificate.html');
-  const fontPath = path.join(rootDir, 'public/assets/template/Cairo.ttf');
-  const arabicAssetsPath = path.join(rootDir, 'arabic_assets.json');
-
-  if (!fs.existsSync(logoPath)) throw new Error(`Logo file not found at ${logoPath}`);
-  if (!fs.existsSync(signaturePath)) throw new Error(`Signature file not found at ${signaturePath}`);
-  if (!fs.existsSync(stampPath)) throw new Error(`Stamp file not found at ${stampPath}`);
-  if (!fs.existsSync(templatePath)) throw new Error(`Template file not found at ${templatePath}`);
-  
-  const logoBase64 = "data:image/png;base64," + fs.readFileSync(logoPath).toString("base64");
-  const signatureBase64 = "data:image/jpeg;base64," + fs.readFileSync(signaturePath).toString("base64");
-  const stampBase64 = "data:image/jpeg;base64," + fs.readFileSync(stampPath).toString("base64");
-  let html = fs.readFileSync(templatePath, 'utf8');
-
-  // Embed Cairo font if exists for offline Arabic support
-  let fontBase64 = '';
-  if (fs.existsSync(fontPath)) {
-    fontBase64 = fs.readFileSync(fontPath).toString('base64');
-  }
-
-  // Fill template - Improved cleaning of client name to prevent duplication
-  const cleanClient = certData.client
+  // Clean client name
+  const cleanClientName = certData.client
     .replace(/^Materials of M\/S\s+/i, '')
     .replace(/^Materials of\s+/i, '')
     .replace(/^M\/S\s+/i, '')
     .trim();
-  
-  let arabicAssets = { header: '', footer: '' };
-  if (fs.existsSync(arabicAssetsPath)) {
-    arabicAssets = JSON.parse(fs.readFileSync(arabicAssetsPath, 'utf8'));
-  }
 
-  html = html
-    .replace('{{LOGO_DATA}}', logoBase64)
-    .replace('{{SIGNATURE_DATA}}', signatureBase64)
-    .replace('{{STAMP_DATA}}', stampBase64)
-    .replace('{{ARABIC_HEADER_DATA}}', arabicAssets.header)
-    .replace('{{ARABIC_FOOTER_DATA}}', arabicAssets.footer)
-    .replace('{{QR_DATA}}', qrDataUrl)
-    .replace('{{CERT_REF}}', certData.cert_id)
-    .replace('{{CERT_DATE}}', certData.issue_date)
-    .replace('{{CLIENT_NAME}}', cleanClient);
+  const templateData = {
+    certRef: certData.cert_id,
+    issueDate: certData.issue_date,
+    cleanClientName,
+    items: certData.line_items || [],
+    qrCodeUrl
+  };
 
-  // Inject base64 font if we have it
-  if (fontBase64) {
-    const fontStyle = `
-      <style>
-        @font-face {
-          font-family: 'Cairo';
-          src: url(data:font/ttf;base64,${fontBase64}) format('truetype');
-          font-weight: normal;
-          font-style: normal;
-        }
-        .rtl, .header-col.right, .bottom-footer .rtl {
-          font-family: 'Cairo', sans-serif !important;
-        }
-      </style>
-    `;
-    html = html.replace('</head>', `${fontStyle}</head>`);
-  }
-
-  const tableRows = (certData.line_items || []).map(item => `
-    <tr>
-        <td class="col-item">${item.item_no}</td>
-        <td class="col-site">${item.site_id}</td>
-        <td class="col-desc">${item.description}</td>
-        <td class="col-qty">${item.quantity}</td>
-        <td class="col-unit">${item.unit}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="5" style="text-align:center">No items listed</td></tr>';
-  
-  html = html.replace('{{TABLE_ROWS}}', tableRows);
+  const html = CERTIFICATE_TEMPLATE(templateData);
 
   let page;
   try {
     const browser = await getBrowser();
     page = await browser.newPage();
     
-    // Set a timeout for the entire operation
-    await page.setDefaultTimeout(60000); 
+    // Set a timeout
+    await page.setDefaultTimeout(30000); 
     
-    // Set content and wait for fonts to load properly
+    // Set content
     await page.setContent(html, { waitUntil: 'load' });
     
-    // Force font loading check
+    // Wait for fonts
     await page.evaluateHandle('document.fonts.ready');
     
     const pdfBuffer = await page.pdf({ 
       format: 'A4', 
       printBackground: true,
-      margin: { top: '0.4in', right: '0.4in', bottom: '0.4in', left: '0.4in' },
+      margin: { top: '0.2in', right: '0.2in', bottom: '0.2in', left: '0.2in' },
       preferCSSPageSize: true
     });
     
     return { 
       pdfBytes: new Uint8Array(pdfBuffer), 
-      qrDataUrl, 
+      qrDataUrl: qrCodeUrl, 
       verificationUrl, 
       sha256Hash, 
-      fileName: `${certData.line_items?.[0]?.site_id || 'Unknown'}_MYMF_Cert_${certData.cert_id.replace(/[^a-zA-Z0-9]/g, '_')}.pdf` 
+      fileName: `\${certData.line_items?.[0]?.site_id || 'Unknown'}_MYMF_Cert_\${certData.cert_id.replace(/[^a-zA-Z0-9]/g, '_')}.pdf` 
     };
   } catch (err: any) {
-    console.error(`[PDF Engine] CRITICAL FAILURE for ${certData.cert_id}:`, err);
-    throw new Error(`PDF generation failed: ${err.message}`);
+    console.error(`[PDF Engine] CRITICAL FAILURE for \${certData.cert_id}:`, err);
+    throw new Error(`PDF generation failed: \${err.message}`);
   } finally {
     if (page) {
       try {
         await page.close();
       } catch (e) {
-        console.error('[PDF Engine] Error closing page (swallowed):', e);
+        // Ignore
       }
     }
   }
 }
-

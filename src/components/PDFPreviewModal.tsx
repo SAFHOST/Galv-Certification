@@ -29,7 +29,11 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ certificate, i
 
     const loadPdf = async () => {
       try {
-        const response = await fetch(`/api/certificates/${encodeURIComponent(certificate.cert_id)}/pdf`);
+        const response = await fetch('/api/certificates/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(certificate)
+        });
         
         if (!response.ok) {
           const responseText = await response.text();
@@ -38,15 +42,17 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ certificate, i
             const errJson = JSON.parse(responseText);
             if (errJson.error) msg = errJson.error;
           } catch {
-            if (responseText.includes('<!DOCTYPE html>')) msg = 'Server error during PDF generation. Please check logs.';
-            else if (responseText) msg = responseText.slice(0, 200);
+            if (responseText.includes('<!DOCTYPE html>') || responseText.startsWith('A server error occurred')) {
+              msg = `Server Error (${response.status}): The PDF engine encountered an issue. Check server logs.`;
+            } else if (responseText) {
+              msg = responseText.slice(0, 200);
+            }
           }
           throw new Error(msg);
         }
 
-        const bytes = new Uint8Array(await response.arrayBuffer());
-
-        const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
+        const bytes = await response.arrayBuffer();
+        const blob = new Blob([bytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         if (isMounted) {
           setPdfBlobUrl(url);
@@ -54,7 +60,7 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ certificate, i
         }
       } catch (err: any) {
         if (isMounted) {
-          setError(err.message || 'Failed generating PDF');
+          setError(err.message || 'Failed generating PDF preview');
           setLoading(false);
         }
       }
