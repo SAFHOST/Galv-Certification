@@ -433,13 +433,16 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({
 
               <div className="col-span-1">
                 <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-0.5">Unit</label>
-                <input
-                  type="text"
+                <select
                   value={item.unit}
                   onChange={(e) => handleUpdateLineItem(idx, 'unit', e.target.value)}
-                  placeholder="3M"
                   className="w-full px-2 py-1.5 border border-slate-300 rounded bg-white font-mono text-slate-900"
-                />
+                >
+                  <option value="PCS">PCS</option>
+                  <option value="M">M</option>
+                  <option value="Set">Set</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               <div className="col-span-1">

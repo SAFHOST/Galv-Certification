@@ -236,17 +236,48 @@ export async function generateCertificatePDF(
       page.drawText(h, { x: colX[i], y: tableY - 8, size: 9, font: fontBold });
   });
 
+function wrapText(text: string, font: any, size: number, maxWidth: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = words[0];
+
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    const width = font.widthOfTextAtSize(currentLine + ' ' + word, size);
+    if (width < maxWidth) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  lines.push(currentLine);
+  return lines;
+}
+
+// ... (in generateCertificatePDF)
+
   const items = certData.line_items || [];
+  let currentY = tableY - 35;
   items.forEach((item, i) => {
-    const y = tableY - 35 - (i * 25);
-    // Draw row rectangle
-    page.drawRectangle({ x: tableX, y: y - 10, width: tableWidth, height: 25, borderColor: rgb(0, 0, 0), borderWidth: 1 });
+    const wrappedDescription = wrapText(item.description, fontRegular, 9, 190);
+    const numLines = wrappedDescription.length;
+    const rowHeight = Math.max(25, numLines * 12);
     
-    page.drawText(String(item.item_no), { x: colX[0], y: y - 2, size: 9, font: fontRegular });
-    page.drawText(item.site_id, { x: colX[1], y: y - 2, size: 9, font: fontRegular });
-    page.drawText(item.description, { x: colX[2], y: y - 2, size: 9, font: fontRegular });
-    page.drawText(String(item.quantity), { x: colX[3], y: y - 2, size: 9, font: fontRegular });
-    page.drawText(item.unit, { x: colX[4], y: y - 2, size: 9, font: fontRegular });
+    // Draw row rectangle
+    page.drawRectangle({ x: tableX, y: currentY - rowHeight + 15, width: tableWidth, height: rowHeight, borderColor: rgb(0, 0, 0), borderWidth: 1 });
+    
+    page.drawText(String(item.item_no), { x: colX[0], y: currentY - 5, size: 9, font: fontRegular });
+    page.drawText(item.site_id, { x: colX[1], y: currentY - 5, size: 9, font: fontRegular });
+    
+    wrappedDescription.forEach((line, lineIdx) => {
+       page.drawText(line, { x: colX[2], y: currentY - 5 - (lineIdx * 12), size: 9, font: fontRegular });
+    });
+    
+    page.drawText(String(item.quantity), { x: colX[3], y: currentY - 5, size: 9, font: fontRegular });
+    page.drawText(item.unit, { x: colX[4], y: currentY - 5, size: 9, font: fontRegular });
+    
+    currentY -= rowHeight;
   });
   
   // Footer: Signature, Stamp, QR

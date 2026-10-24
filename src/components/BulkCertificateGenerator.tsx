@@ -1,15 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import {
-  FileSpreadsheet,
-  Upload,
-  Download,
-  CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
-  Trash2,
-} from 'lucide-react';
+import { Upload, FileSpreadsheet, Download, RefreshCw } from 'lucide-react';
 import type { CertificateData, LineItem } from '../types/certificate';
 import { generateCertificatePDF } from '../services/pdfEngine';
 import { certificateRepository } from '../services/storage';
@@ -18,118 +10,155 @@ interface BulkCertificateGeneratorProps {
   onSuccessViewLedger: () => void;
 }
 
-export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> = ({
-  onSuccessViewLedger,
-}) => {
+interface ParsedSiteRow {
+  siteId: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  heatNumber: string;
+  measuredDft: number;
+}
+
+export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> = ({ onSuccessViewLedger }) => {
   const [client, setClient] = useState('Materials of M/S GBH');
   const [projectName, setProjectName] = useState('STC Telecom Site Extension Project');
   const [issueDate, setIssueDate] = useState('24 OCT 2026');
+  const [poNumber, setPoNumber] = useState('PO-2026-GBH-8821');
+  const [bathTemp, setBathTemp] = useState(450);
+  const [zincPurity, setZincPurity] = useState(99.995);
+  const [minDft, setMinDft] = useState(85);
+
+  const [parsedData, setParsedData] = useState<ParsedSiteRow[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const processFile = async (file: File) => {
+  const handleFileUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = new Uint8Array(e.target?.result as ArrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
+      const parsed: ParsedSiteRow[] = rows.map((row: any) => ({
+        siteId: String(row['Site #'] || row['site_id'] || '').trim(),
+        description: String(row['Description of Articles'] || row['description'] || '').trim(),
+        quantity: Number(row['Quantity'] || 1),
+        unit: String(row['Unit'] || 'PCS').trim(),
+        heatNumber: String(row['Heat Number'] || 'HT-N/A').trim(),
+        measuredDft: Number(row['Measured DFT (µm)'] || 91.5),
+      }));
+      setParsedData(parsed);
+      setError(null);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleGenerate = async () => {
     setIsProcessing(true);
-    setError(null);
-    setSuccess(false);
-
     try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const data = new Uint8Array(event.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const jsonRows: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
+      const zip = new JSZip();
+      const createdCerts: CertificateData[] = [];
+      const pdfBytesMap = new Map<string, Uint8Array>();
+      const currentHost = typeof window !== 'undefined' ? window.location.origin : 'https://mymf.com.sa';
 
-          if (jsonRows.length === 0) throw new Error('Excel sheet is empty.');
+      for (let i = 0; i < parsedData.length; i++) {
+        const row = parsedData[i];
+        const certId = `MYF-QC-26-${254 + i}`;
+        const certPayload: CertificateData = {
+          cert_id: certId,
+          issue_date: issueDate,
+          client: client,
+          project_name: projectName,
+          purchase_order_no: poNumber,
+          status: 'AUTHENTIC_VERIFIED',
+          line_items: [{ item_no: 1, site_id: row.siteId, description: row.description, quantity: row.quantity, unit: row.unit, heat_number: row.heatNumber, measured_dft_um: row.measuredDft, visual_inspection: 'PASS' } as LineItem],
+          created_at: new Date().toISOString(),
+          technical_params: { standard: 'BS EN ISO 1461', bath_temperature_c: bathTemp, zinc_purity_percent: zincPurity, min_required_dft_um: minDft }
+        } as CertificateData;
 
-          const zip = new JSZip();
-          const createdCerts: CertificateData[] = [];
-          const pdfBytesMap = new Map<string, Uint8Array>();
-          const currentHost = typeof window !== 'undefined' ? window.location.origin : 'https://mymf.com.sa';
+        const pdfGen = await generateCertificatePDF(certPayload, { hostDomain: currentHost });
+        createdCerts.push(certPayload);
+        pdfBytesMap.set(certId, pdfGen.pdfBytes);
+        zip.file(`${certId}_Site_${row.siteId}_Galv_Cert.pdf`, pdfGen.pdfBytes);
+      }
 
-          for (let i = 0; i < jsonRows.length; i++) {
-            const row = jsonRows[i];
-            const siteId = String(row['Site #'] || row['site_id'] || `SITE-${i + 1}`).trim();
-            const description = String(row['Description of Articles'] || row['description'] || 'Hot-Dip Galvanized Assembly').trim();
-            const quantity = Number(row['Quantity'] || 1);
-            const certId = `MYF-QC-26-${200 + i}`;
-
-            const lineItem: LineItem = {
-              item_no: 1,
-              site_id: siteId,
-              description: description,
-              quantity: quantity,
-              unit: String(row['Unit'] || 'PCS').trim(),
-              heat_number: String(row['Heat Number'] || 'HT-N/A').trim(),
-              measured_dft_um: Number(row['Measured DFT (µm)'] || 91.5),
-              visual_inspection: 'PASS',
-            };
-
-            const certPayload: CertificateData = {
-              cert_id: certId,
-              issue_date: issueDate,
-              client: client,
-              project_name: projectName,
-              status: 'AUTHENTIC_VERIFIED',
-              line_items: [lineItem],
-              created_at: new Date().toISOString(),
-            } as CertificateData;
-
-            const pdfGen = await generateCertificatePDF(certPayload, { hostDomain: currentHost });
-            createdCerts.push(certPayload);
-            pdfBytesMap.set(certId, pdfGen.pdfBytes);
-            zip.file(`${certId}_Site_${siteId}_Galv_Cert.pdf`, pdfGen.pdfBytes);
-          }
-
-          await certificateRepository.saveBulk(createdCerts, pdfBytesMap);
-          const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-          const url = URL.createObjectURL(zipBlob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `MYMF_Bulk_Certificates_${new Date().toISOString().slice(0, 10)}.zip`;
-          a.click();
-          URL.revokeObjectURL(url);
-          setSuccess(true);
-        } catch (err: any) {
-          setError(err.message);
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-      reader.readAsArrayBuffer(file);
+      await certificateRepository.saveBulk(createdCerts, pdfBytesMap);
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MYMF_Certificates_${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      onSuccessViewLedger();
     } catch (err: any) {
       setError(err.message);
+    } finally {
       setIsProcessing(false);
     }
   };
 
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-      <h1 className="text-xl font-bold text-slate-900">Bulk Certificate Generator</h1>
-      
-      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Client Name" className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
-          <input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Project Name" className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
-        </div>
+  const handleDownloadSampleExcel = () => {
+    const sampleData = [
+      {
+        'Site #': 'ZUL033',
+        'Description of Articles': 'RF Extension Mount',
+        'Quantity': 2,
+        'Unit': 'PCS',
+        'Measured DFT (µm)': 91.5,
+        'Heat Number': 'HT-44810-B',
+      },
+    ];
+    const worksheet = XLSX.utils.json_to_sheet(sampleData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inspection Data');
+    XLSX.writeFile(workbook, 'MYMF_Bulk_Certificate_Template.xlsx');
+  };
 
-        <label
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setIsDragging(false); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); }}
-          className={'border-2 border-dashed ' + (isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 bg-slate-50') + ' h-40 flex flex-col items-center justify-center rounded-xl cursor-pointer'}
-        >
-          <input type="file" className="hidden" onChange={(e) => { if(e.target.files?.[0]) processFile(e.target.files[0]); }} />
-          <Upload className="w-8 h-8 text-slate-400 mb-2" />
-          <span className="text-sm font-semibold">Click to upload or Drop Excel File</span>
-        </label>
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      <h1 className="text-xl font-bold">Bulk Certificate Generator</h1>
+      <div className="bg-white p-5 border rounded-xl space-y-4">
+        <h2 className="font-bold text-sm">01. MASTER CERTIFICATE PARAMETERS</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <input value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="px-3 py-2 border rounded-lg" placeholder="Issue Date" />
+          <input value={client} onChange={(e) => setClient(e.target.value)} className="px-3 py-2 border rounded-lg" placeholder="Client / Beneficiary" />
+          <input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="px-3 py-2 border rounded-lg" placeholder="Project Name / Site Ref" />
+          <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} className="px-3 py-2 border rounded-lg" placeholder="Purchase Order Ref" />
+        </div>
+        <h2 className="font-bold text-sm mt-4">02. METALLURGICAL & GALVANIZATION SPECIFICATIONS</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <input type="number" value={bathTemp} onChange={(e) => setBathTemp(Number(e.target.value))} placeholder="Zinc Bath Temp (°C)" className="px-3 py-2 border rounded-lg" />
+          <input type="number" value={zincPurity} onChange={(e) => setZincPurity(Number(e.target.value))} placeholder="Zinc Ingot Purity (%)" className="px-3 py-2 border rounded-lg" />
+          <input type="number" value={minDft} onChange={(e) => setMinDft(Number(e.target.value))} placeholder="Min Required DFT (µm)" className="px-3 py-2 border rounded-lg" />
+        </div>
+        
+        <div className="flex justify-between items-center mt-4">
+            <button onClick={handleDownloadSampleExcel} className="text-xs text-emerald-700 underline cursor-pointer">Download Sample Template</button>
+            <label onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }} onDragLeave={() => setIsDragging(false)} onDrop={(e) => { e.preventDefault(); setIsDragging(false); if(e.dataTransfer.files[0]) handleFileUpload(e.dataTransfer.files[0]); }} className={'border-2 border-dashed h-20 w-1/2 flex items-center justify-center rounded-xl cursor-pointer ' + (isDragging ? 'bg-emerald-50' : 'bg-slate-50')}>
+              <Upload className="mr-2" />
+              <span>Drop Excel File</span>
+              <input type="file" className="hidden" onChange={(e) => { if(e.target.files?.[0]) handleFileUpload(e.target.files[0]); }} />
+            </label>
+        </div>
       </div>
 
-      {isProcessing && <div className="text-sm font-bold animate-pulse">Processing...</div>}
+      {parsedData.length > 0 && (
+        <div className="bg-white p-5 border rounded-xl space-y-4">
+          <h2 className="font-bold text-sm">03. GENERATE</h2>
+          <table className="w-full text-xs border-collapse">
+            <thead className="bg-slate-50">
+              <tr><th className="p-2 border">Site</th><th className="p-2 border">Description</th><th className="p-2 border">Qty</th></tr>
+            </thead>
+            <tbody>
+              {parsedData.map((row, i) => <tr key={i}><td className="p-2 border">{row.siteId}</td><td className="p-2 border">{row.description}</td><td className="p-2 border">{row.quantity}</td></tr>)}
+            </tbody>
+          </table>
+          <button onClick={handleGenerate} disabled={isProcessing} className="w-full py-3 bg-slate-900 text-white rounded-xl">
+            {isProcessing ? 'Generating...' : 'Generate Certificates & Download ZIP'}
+          </button>
+        </div>
+      )}
       {error && <div className="p-3 bg-rose-50 text-rose-700 rounded-lg">{error}</div>}
-      {success && <div className="p-3 bg-emerald-50 text-emerald-700 rounded-lg">Certificates generated and added to ledger.</div>}
     </div>
   );
 };
