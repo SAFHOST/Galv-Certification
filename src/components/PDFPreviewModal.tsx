@@ -40,7 +40,11 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ certificate, i
           let msg = 'Failed to load PDF';
           try {
             const errJson = JSON.parse(responseText);
-            if (errJson.error) msg = errJson.error;
+            if (errJson.error === 'SERVERLESS_BOOT_CRASH') {
+              msg = `BOOT CRASH: ${errJson.message || 'Unknown crash'}${errJson.stack ? '\n' + errJson.stack.slice(0, 200) + '...' : ''}`;
+            } else if (errJson.error || errJson.message) {
+              msg = errJson.error || errJson.message;
+            }
           } catch {
             if (responseText.includes('<!DOCTYPE html>') || responseText.startsWith('A server error occurred')) {
               msg = `Server Error (${response.status}): The PDF engine encountered an issue. Check server logs.`;

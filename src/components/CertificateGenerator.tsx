@@ -170,7 +170,12 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({
       }
 
       if (!response.ok) {
-        throw new Error(result.error || result.message || "Failed to generate certificate");
+        // Extract the exact boot error message or standard error
+        const detailedError = result.message || result.details || result.error || 'Server error';
+        if (result.error === 'SERVERLESS_BOOT_CRASH') {
+          throw new Error(`BOOT CRASH: ${detailedError}${result.stack ? '\n' + result.stack.slice(0, 300) + '...' : ''}`);
+        }
+        throw new Error(`${result.error || 'Error'}: ${detailedError}`);
       }
 
       const { sha256_hash, verification_url } = result;

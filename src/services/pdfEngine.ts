@@ -100,18 +100,21 @@ export async function generateCertificatePDF(
   };
 
   // 4. Draw Header
+  const headerTop = height - 40;
+  
   // Left: English Details
   page.drawText("Mohammed Yehya Al-Aseery\nFor Metal Industries\nCR No: 1010997047\nVAT No: 302154658900006", {
     x: 40,
-    y: height - 40,
-    size: 8,
+    y: headerTop,
+    size: 8.5,
     font: fontRegular,
-    lineHeight: 11,
+    lineHeight: 12,
     color: rgb(0.1, 0.1, 0.1),
   });
 
-  // Center: Logo (Increased size by 50% as requested: from 60x60 to 90x90)
-  await drawBase64Image(PDF_ASSETS.images.logo, width / 2 - 45, height - 95, 90, 90);
+  // Center: Logo (Balanced and Sharp)
+  // Logo dimensions: 90x90. Centered at width/2
+  await drawBase64Image(PDF_ASSETS.images.logo, width / 2 - 45, height - 100, 90, 90);
 
   // Right: Arabic Details (RTL reshaped)
   const arabicLine1 = fixArabicText("مصنع محمد يحيى العسيري");
@@ -120,26 +123,25 @@ export async function generateCertificatePDF(
   const arabicLine4 = fixArabicText("الرقم الضريبي: 302154658900006");
 
   const arabicX = width - 40;
-  const arabicY = height - 40;
   
-  page.drawText(arabicLine1, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine1, 10), y: arabicY, size: 10, font: fontArabic });
-  page.drawText(arabicLine2, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine2, 10), y: arabicY - 12, size: 10, font: fontArabic });
-  page.drawText(arabicLine3, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine3, 10), y: arabicY - 24, size: 10, font: fontArabic });
-  page.drawText(arabicLine4, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine4, 10), y: arabicY - 36, size: 10, font: fontArabic });
+  page.drawText(arabicLine1, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine1, 10), y: headerTop, size: 10, font: fontArabic });
+  page.drawText(arabicLine2, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine2, 10), y: headerTop - 13, size: 10, font: fontArabic });
+  page.drawText(arabicLine3, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine3, 10), y: headerTop - 26, size: 10, font: fontArabic });
+  page.drawText(arabicLine4, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine4, 10), y: headerTop - 39, size: 10, font: fontArabic });
 
   // Top Divider
   page.drawLine({
     start: { x: 40, y: height - 105 },
     end: { x: width - 40, y: height - 105 },
-    thickness: 1,
+    thickness: 1.5,
     color: rgb(0, 0, 0),
   });
 
   // 5. Certificate Title
   page.drawText("HOT DIP GALVANIZATION CERTIFICATE", {
-    x: width / 2 - 130,
-    y: height - 130,
-    size: 14,
+    x: width / 2 - 140,
+    y: height - 135,
+    size: 15,
     font: fontBold,
     color: rgb(0, 0, 0),
   });
@@ -147,14 +149,14 @@ export async function generateCertificatePDF(
   // 6. Metadata Row
   page.drawText(`Cert. Ref. No.: ${certData.cert_id}`, {
     x: 40,
-    y: height - 160,
+    y: height - 165,
     size: 10,
     font: fontBold,
   });
 
   page.drawText(`Date: ${certData.issue_date}`, {
     x: width - 150,
-    y: height - 160,
+    y: height - 165,
     size: 10,
     font: fontBold,
   });
@@ -170,7 +172,7 @@ export async function generateCertificatePDF(
   
   page.drawText(bodyText, {
     x: 40,
-    y: height - 200,
+    y: height - 205,
     size: 10,
     font: fontRegular,
     maxWidth: width - 80,
@@ -178,18 +180,24 @@ export async function generateCertificatePDF(
   });
 
   // 8. Line Items Table
-  let tableY = height - 250;
+  let tableY = height - 260;
   
-  // Headers
-  const colX = [40, 80, 220, 470, 520];
-  const headers = ['Item #', 'Site #', 'Description', 'Qty', 'Unit'];
+  // Adjusted colX for precise alignment: Item# (8%), Site# (27%), Desc (45%), Qty (10%), Unit (10%)
+  // Total usable width = 515 (595 - 80)
+  // 0: 40 (Start)
+  // 1: 40 + 41 = 81 (Site#)
+  // 2: 81 + 139 = 220 (Desc)
+  // 3: 220 + 232 = 452 (Qty)
+  // 4: 452 + 51 = 503 (Unit)
+  const colX = [45, 85, 225, 465, 515];
+  const headers = ['Item #', 'Site #', 'Description', 'Quantity', 'Unit'];
   
   page.drawRectangle({
     x: 40,
     y: tableY - 15,
     width: width - 80,
     height: 20,
-    color: rgb(0.95, 0.95, 0.95),
+    color: rgb(0.96, 0.96, 0.96),
   });
 
   headers.forEach((h, i) => {
@@ -198,6 +206,7 @@ export async function generateCertificatePDF(
       y: tableY - 2,
       size: 9,
       font: fontBold,
+      color: rgb(0.2, 0.2, 0.2)
     });
   });
 
@@ -206,10 +215,10 @@ export async function generateCertificatePDF(
   certData.line_items?.forEach((item, idx) => {
     const row = [
       (idx + 1).toString(),
-      item.site_id || '-',
+      (item.site_id || '').toUpperCase(),
       item.description || '-',
       (item.quantity || 0).toString(),
-      item.unit || 'PCS'
+      (item.unit || 'PCS').toUpperCase()
     ];
 
     row.forEach((text, i) => {
@@ -218,7 +227,7 @@ export async function generateCertificatePDF(
         y: tableY,
         size: 9,
         font: fontRegular,
-        maxWidth: i === 2 ? 240 : undefined,
+        maxWidth: i === 2 ? 230 : undefined,
       });
     });
 
@@ -229,7 +238,7 @@ export async function generateCertificatePDF(
       start: { x: 40, y: tableY + 15 },
       end: { x: width - 40, y: tableY + 15 },
       thickness: 0.5,
-      color: rgb(0.9, 0.9, 0.9),
+      color: rgb(0.85, 0.85, 0.85),
     });
   });
 
