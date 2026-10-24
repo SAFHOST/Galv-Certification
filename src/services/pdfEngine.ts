@@ -161,18 +161,14 @@ export async function generateCertificatePDF(
   const qrDataUrl = await generateQRCodeDataUrl(verificationUrl);
   const qrImageBytes = dataUrlToUint8Array(qrDataUrl);
 
-  // 4. Load official template PDF
-  const templatePdfBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.templatePdfBase64);
-  const templateDoc = await PDFDocument.load(templatePdfBytes);
-
+  // 4. Create new PDF document from scratch instead of loading template
   const pdfDoc = await PDFDocument.create();
   pdfDoc.setTitle(`MYMF Galvanization Certificate ${certData.cert_id}`);
   pdfDoc.setAuthor('Mohammed Yehya Al-Aseery For Metal Industries (MYMF)');
   pdfDoc.setSubject(`Hot-Dip Galvanization Inspection Certificate - BS EN ISO 1461 - ${certData.cert_id}`);
-  pdfDoc.setKeywords(['QA/QC', 'Galvanization', 'ISO 1461', certData.cert_id, certData.client]);
-
-  const [page] = await pdfDoc.copyPages(templateDoc, [0]);
-  pdfDoc.addPage(page);
+  
+  const page = pdfDoc.addPage([612, 792]); // Standard Letter size
+  const { width, height } = page.getSize();
 
   // Load standard Helvetica typefaces
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -181,102 +177,25 @@ export async function generateCertificatePDF(
   // Embed dynamic QR Code
   const qrImage = await pdfDoc.embedPng(qrImageBytes);
 
-  // Embed Stamp and Signature assets to support dynamic overlay if needed
+  // Embed Stamp and Signature assets
   const stampImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.stampJpgBase64);
   const stampImage = await pdfDoc.embedJpg(stampImageBytes);
-
   const signImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.signatureJpgBase64);
   const signImage = await pdfDoc.embedJpg(signImageBytes);
 
-  // Harmonize English CR NO to 1010207045 (exact match with Arabic side)
-  page.drawRectangle({
-    x: 75,
-    y: 654,
-    width: 175,
-    height: 14,
-    color: rgb(1, 1, 1),
-  });
-  page.drawText('CR NO: 1010207045', {
-    x: 76.5,
-    y: 657,
-    size: 9.96,
-    font: fontRegular,
-    color: rgb(0, 0, 0),
-  });
+  // Header Logo and Info
+  page.drawText('Mohammed Yehya Al-Aseery', { x: 50, y: height - 80, size: 12, font: fontBold });
+  page.drawText('For Metal Industries', { x: 50, y: height - 95, size: 10, font: fontRegular });
+  page.drawText('CR NO: 1010207045', { x: 50, y: height - 110, size: 9, font: fontRegular });
+  
+  // Title
+  page.drawText('CERTIFICATE', { x: width / 2 - 50, y: height - 150, size: 18, font: fontBold });
+  page.drawText('HOT-DIP-GALVANIZATION', { x: width / 2 - 65, y: height - 170, size: 12, font: fontRegular });
+  
+  // Issue Date
+  page.drawText(`Date: ${certData.issue_date}`, { x: 50, y: height - 200, size: 10, font: fontBold, color: rgb(0.6, 0, 0) });
 
-  // Cover fragmented Arabic header area in template and overlay connected Arabic image
-  page.drawRectangle({
-    x: 360,
-    y: 636,
-    width: 215,
-    height: 76,
-    color: rgb(1, 1, 1),
-  });
-
-  const arabicBytes = renderArabicHeaderPng();
-  if (arabicBytes) {
-    try {
-      const arabicImg = await pdfDoc.embedPng(arabicBytes);
-      page.drawImage(arabicImg, {
-        x: 372,
-        y: 642,
-        width: 195,
-        height: 58,
-      });
-    } catch {}
-  }
-
-  // Draw full-width horizontal rule under both English and Arabic headers
-  page.drawLine({
-    start: { x: 72, y: 625 },
-    end: { x: 557, y: 625 },
-    color: rgb(0, 0, 0),
-    thickness: 1,
-  });
-
-  // 1. Dynamic Certificate Reference Number
-  // Overwrite "Cert. Ref. No.: MYF-QC-25-116."
-  page.drawRectangle({
-    x: 75,
-    y: 605,
-    width: 280,
-    height: 16,
-    color: rgb(1, 1, 1),
-  });
-  const refText = `Cert. Ref. No.: ${certData.cert_id}.`;
-  page.drawText(refText, {
-    x: 76.5,
-    y: 609,
-    size: 9.96,
-    font: fontRegular,
-    color: rgb(0, 0, 0),
-  });
-
-  // 2. Dynamic Issue Date (Red/Maroon color #C00000 matching template)
-  page.drawRectangle({
-    x: 105,
-    y: 535,
-    width: 140,
-    height: 16,
-    color: rgb(1, 1, 1),
-  });
-  page.drawText(certData.issue_date, {
-    x: 106,
-    y: 538,
-    size: 9,
-    font: fontRegular,
-    color: rgb(0.753, 0, 0),
-  });
-
-  // 3. Dynamic Attestation Paragraph with Client Name
-  page.drawRectangle({
-    x: 112,
-    y: 455,
-    width: 465,
-    height: 45,
-    color: rgb(1, 1, 1),
-  });
-
+  // 3. Dynamic Attestation Paragraph
   const rawClient = certData.client.trim();
   const clientFormatted = rawClient.toLowerCase().startsWith('materials of')
     ? rawClient
@@ -285,208 +204,57 @@ export async function generateCertificatePDF(
   page.drawText(
     `Mohammed Yehya Al-Aseery Factory For Metal Industries ( MYMF ) certifies that ${clientFormatted}, were`,
     {
-      x: 116.9,
-      y: 485,
-      size: 9.96,
+      x: 50,
+      y: height - 230,
+      size: 10,
       font: fontRegular,
-      color: rgb(0, 0, 0),
     }
   );
   page.drawText('hot dip galvanized in conformance to BS EN ISO 1461 Standard.', {
-    x: 116.9,
-    y: 472,
-    size: 9.96,
+    x: 50,
+    y: height - 245,
+    size: 10,
     font: fontRegular,
-    color: rgb(0, 0, 0),
-  });
-
-  // Underline under attestation paragraph
-  page.drawLine({
-    start: { x: 112, y: 450 },
-    end: { x: 557, y: 450 },
-    color: rgb(0, 0, 0),
-    thickness: 1,
   });
 
   // 4. Dynamic Line Items Table
-  // Clear the existing template table area completely
-  page.drawRectangle({
-    x: 68,
-    y: 330,
-    width: 494,
-    height: 90,
-    color: rgb(1, 1, 1),
-  });
-
-  const tableX = 72;
-  const tableW = 485;
-  const startY = 425;
-  const headerH = 22;
-  const items = certData.line_items || [];
+  const tableX = 50;
+  const startY = height - 280;
   const rowH = 25;
+  const colX = [50, 120, 200, 450, 520, 580];
 
-  // Draw Header Box
-  page.drawRectangle({
-    x: tableX,
-    y: startY - headerH,
-    width: tableW,
-    height: headerH,
-    borderColor: rgb(0, 0, 0),
-    borderWidth: 1,
-    color: rgb(1, 1, 1),
+  // Table Headers
+  const headers = ['Item #', 'Site #', 'Description', 'Quantity', 'Unit'];
+  headers.forEach((h, i) => {
+      page.drawText(h, { x: colX[i] + 5, y: startY, size: 10, font: fontBold });
+  });
+  page.drawLine({ start: { x: tableX, y: startY - 5 }, end: { x: 580, y: startY - 5 }, thickness: 1 });
+
+  // Table Rows
+  const items = certData.line_items || [];
+  items.forEach((item, i) => {
+    const y = startY - (i + 1) * rowH;
+    page.drawText(String(item.item_no), { x: colX[0] + 5, y, size: 10, font: fontRegular });
+    page.drawText(item.site_id, { x: colX[1] + 5, y, size: 10, font: fontRegular });
+    page.drawText(item.description, { x: colX[2] + 5, y, size: 10, font: fontRegular });
+    page.drawText(String(item.quantity), { x: colX[3] + 5, y, size: 10, font: fontRegular });
+    page.drawText(item.unit, { x: colX[4] + 5, y, size: 10, font: fontRegular });
   });
 
-  // Expanded columns: Item# (38), Site# (75), Description (265), Quantity (58), Unit (49)
-  const colX = [72, 110, 185, 450, 508, 557];
+  // Footer area (Signature, Stamp, QR)
+  page.drawImage(signImage, { x: 50, y: 150, width: 100, height: 50 });
+  page.drawText(certData.sign_off?.name || 'Adel Y.Aseery', { x: 50, y: 130, size: 10, font: fontRegular });
+  
+  page.drawImage(stampImage, { x: 250, y: 120, width: 100, height: 100 });
+  
+  page.drawImage(qrImage, { x: 450, y: 120, width: 80, height: 80 });
+  page.drawText('SCAN TO VERIFY', { x: 450, y: 105, size: 8, font: fontRegular });
 
-  // Vertical dividers in header
-  for (let i = 1; i < colX.length - 1; i++) {
-    page.drawLine({
-      start: { x: colX[i], y: startY },
-      end: { x: colX[i], y: startY - headerH },
-      color: rgb(0, 0, 0),
-      thickness: 1,
-    });
-  }
-
-  const itemHdrX = 72 + (38 - fontBold.widthOfTextAtSize('Item #', 9)) / 2;
-  const siteHdrX = 110 + (75 - fontBold.widthOfTextAtSize('Site #', 9)) / 2;
-  const descHdrX = 185 + (265 - fontBold.widthOfTextAtSize('Description', 9)) / 2;
-  const qtyHdrX = 450 + (58 - fontBold.widthOfTextAtSize('Quantity', 9)) / 2;
-  const unitHdrX = 508 + (49 - fontBold.widthOfTextAtSize('Unit', 9)) / 2;
-
-  page.drawText('Item #', { x: itemHdrX, y: startY - 15, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-  page.drawText('Site #', { x: siteHdrX, y: startY - 15, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-  page.drawText('Description', { x: descHdrX, y: startY - 15, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-  page.drawText('Quantity', { x: qtyHdrX, y: startY - 15, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-  page.drawText('Unit', { x: unitHdrX, y: startY - 15, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-
-  // Draw Table Rows
-  let curRowY = startY - headerH;
-
-  for (let i = 0; i < Math.min(items.length, 3); i++) {
-    const item = items[i];
-    const rowTop = curRowY;
-    const rowBottom = curRowY - rowH;
-
-    page.drawRectangle({
-      x: tableX,
-      y: rowBottom,
-      width: tableW,
-      height: rowH,
-      borderColor: rgb(0, 0, 0),
-      borderWidth: 1,
-      color: rgb(1, 1, 1),
-    });
-
-    for (let c = 1; c < colX.length - 1; c++) {
-      page.drawLine({
-        start: { x: colX[c], y: rowTop },
-        end: { x: colX[c], y: rowBottom },
-        color: rgb(0, 0, 0),
-        thickness: 1,
-      });
-    }
-
-    const textY = rowBottom + (rowH - 9) / 2;
-
-    // Item #
-    const itemStr = String(item.item_no);
-    const itemX = 72 + (38 - fontRegular.widthOfTextAtSize(itemStr, 9)) / 2;
-    page.drawText(itemStr, {
-      x: itemX,
-      y: textY,
-      size: 9,
-      font: fontRegular,
-      color: rgb(0, 0, 0),
-    });
-
-    // Site # (centered in 75pt width to prevent overlap)
-    const siteStr = item.site_id || '';
-    const siteW = fontRegular.widthOfTextAtSize(siteStr, 9);
-    const siteX = Math.max(187, 110 + (75 - siteW) / 2); // Corrected X
-    page.drawText(siteStr, {
-      x: siteX,
-      y: textY,
-      size: 9,
-      font: fontRegular,
-      color: rgb(0, 0, 0),
-    });
-
-    // Description (cleanly padded)
-    const rawDesc = item.description || '';
-    const desc = rawDesc.length > 50 ? rawDesc.slice(0, 47) + '...' : rawDesc;
-    page.drawText(desc, {
-      x: 192,
-      y: textY,
-      size: 9,
-      font: fontRegular,
-      color: rgb(0, 0, 0),
-    });
-
-    // Quantity
-    const qtyStr = String(item.quantity);
-    const qtyX = 450 + (58 - fontRegular.widthOfTextAtSize(qtyStr, 9)) / 2;
-    page.drawText(qtyStr, {
-      x: qtyX,
-      y: textY,
-      size: 9,
-      font: fontRegular,
-      color: rgb(0, 0, 0),
-    });
-
-    // Unit
-    const unitStr = item.unit || '3M';
-    const unitX = 508 + (49 - fontRegular.widthOfTextAtSize(unitStr, 9)) / 2;
-    page.drawText(unitStr, {
-      x: unitX,
-      y: textY,
-      size: 9,
-      font: fontRegular,
-      color: rgb(0, 0, 0),
-    });
-
-    curRowY -= rowH;
-  }
-
-
-  // 5. Ensure Stamp & Signature are crisp
-  // Positioned exactly where they are in the attached template
-  // Cover old QR code area cleanly
-  page.drawRectangle({
-    x: 450,
-    y: 125,
-    width: 105,
-    height: 105,
-    color: rgb(1, 1, 1),
-  });
-
-  // Embed the dynamic in-memory QR code at the exact template coordinates
-  page.drawImage(qrImage, {
-    x: 464.46,
-    y: 136.56,
-    width: 78.5,
-    height: 78.5,
-  });
-
-  // Re-stamp to ensure 100% crisp overlay
-  page.drawImage(stampImage, {
-    x: 216.6,
-    y: 216.36,
-    width: 132.15,
-    height: 68.25,
-  });
-
-  // Re-signature to ensure 100% crisp overlay
-  page.drawImage(signImage, {
-    x: 115.5,
-    y: 230.36,
-    width: 72.04,
-    height: 40.1,
-  });
 
   const pdfBytes = await pdfDoc.save();
-  const fileName = `${certData.cert_id.replace(/[^a-zA-Z0-9-_]/g, '_')}_Galv_Cert.pdf`;
+  const firstSite = certData.line_items?.[0]?.site_id || 'UnknownSite';
+  const sanitizedClient = certData.client.replace(/[^a-zA-Z0-9-_]/g, '_');
+  const fileName = `${firstSite}_${sanitizedClient}_${certData.cert_id}.pdf`;
 
   return {
     pdfBytes,
