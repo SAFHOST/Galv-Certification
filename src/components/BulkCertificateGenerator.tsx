@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import * as XLSX from 'xlsx';
+import { read, utils, writeFile } from 'xlsx';
 import JSZip from 'jszip';
 import { Upload, FileSpreadsheet, Download, RefreshCw } from 'lucide-react';
 import type { CertificateData, LineItem } from '../types/certificate';
@@ -38,8 +38,8 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
     const reader = new FileReader();
     reader.onload = (e) => {
       const data = new Uint8Array(e.target?.result as ArrayBuffer);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
+      const workbook = read(data, { type: 'array' });
+      const rows = utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
       const parsed: ParsedSiteRow[] = rows.map((row: any) => ({
         siteId: String(row['Site #'] || row['site_id'] || '').trim(),
         description: String(row['Description of Articles'] || row['description'] || '').trim(),
@@ -110,7 +110,18 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(certPayload),
         });
-        if (!response.ok) throw new Error(`Failed to generate PDF for ${certId}`);
+        
+        if (!response.ok) {
+          let serverError = `Failed to generate PDF for ${certId}`;
+          try {
+            const errorJson = await response.json();
+            if (errorJson.error) serverError = `Server Error [${certId}]: ${errorJson.error}`;
+          } catch {
+            // Not JSON
+          }
+          throw new Error(serverError);
+        }
+        
         const pdfBytes = new Uint8Array(await response.arrayBuffer());
 
         createdCerts.push(certPayload);
@@ -127,6 +138,7 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
       a.click();
       onSuccessViewLedger();
     } catch (err: any) {
+      console.error('Bulk Generation Error:', err);
       setError(err.message);
     } finally {
       setIsProcessing(false);
@@ -144,10 +156,10 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
         'Heat Number': 'HT-44810-B',
       },
     ];
-    const worksheet = XLSX.utils.json_to_sheet(sampleData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inspection Data');
-    XLSX.writeFile(workbook, 'MYMF_Bulk_Certificate_Template.xlsx');
+    const worksheet = utils.json_to_sheet(sampleData);
+    const workbook = utils.book_new();
+    utils.book_append_sheet(workbook, worksheet, 'Inspection Data');
+    writeFile(workbook, 'MYMF_Bulk_Certificate_Template.xlsx');
   };
 
   return (

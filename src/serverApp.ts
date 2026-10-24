@@ -7,8 +7,8 @@ export function createExpressApp() {
   const app = express();
 
   // Basic Middleware
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // CORS headers
   app.use((req, res, next) => {

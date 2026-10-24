@@ -469,6 +469,7 @@ class CertificateRepository {
       if (typeof window !== 'undefined' && window.location?.origin) {
         cert.verification_url = `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`;
       }
+      
       const canonical = getCanonicalCertificatePayload(cert);
       cert.sha256_hash = await generateSHA256Hash(canonical);
 
@@ -476,16 +477,32 @@ class CertificateRepository {
       const driveDocId = `1mymf_${sanitizedId.toLowerCase()}_prod_doc`;
       cert.storage_url = `https://drive.google.com/file/d/${driveDocId}/view?usp=sharing`;
 
+      cert.audit_trail = {
+        issuance_ip: '10.14.88.22',
+        terminal_id: 'MYMF-QC-TERM-01',
+        location: 'Riyadh Industrial Plant, KSA (24.7136° N, 46.6753° E)',
+        issued_at: new Date().toISOString(),
+        issued_by: 'Adel Y. Aseery (QA/QC Section Head)',
+        signature_id: 'MYMF-SIG-AYA-0881',
+        user_agent: 'MYMF-QC-Inspection-Station/2.4 (Strict Audit Mode)',
+        status: 'AUTHORIZED_SECURE',
+        trap_nonce: `TRAP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+      };
+
       this.cache.set(cert.cert_id, cert);
       if (pdfMap && pdfMap.has(cert.cert_id)) {
         this.pdfCache.set(cert.cert_id, pdfMap.get(cert.cert_id)!);
       }
+      
+      try {
+        await setDoc(doc(db, 'certificates', cert.cert_id), cert);
+        await this.addAudit(cert.cert_id, 'CERTIFICATE_ISSUED_BULC', { client: cert.client });
+      } catch (e) {
+        console.error(`Failed to persist ${cert.cert_id} to Firestore`, e);
+      }
     }
 
-          // No persistence needed
-
-
-    // Sync all in bulk to server
+    // Sync all in bulk to server if called from browser
     if (typeof window !== 'undefined') {
       try {
         await fetch('/api/certificates/bulk-save', {

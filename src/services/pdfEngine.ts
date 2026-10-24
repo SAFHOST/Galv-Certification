@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser } from 'puppeteer';
 import QRCode from 'qrcode';
 import fs from 'fs';
 import path from 'path';
@@ -16,6 +16,31 @@ export interface PDFGenerationResult {
   verificationUrl: string;
   sha256Hash: string;
   fileName: string;
+}
+
+// Singleton browser instance for performance and stability
+let globalBrowser: Browser | null = null;
+
+async function getBrowser(): Promise<Browser> {
+  if (globalBrowser && globalBrowser.isConnected()) {
+    return globalBrowser;
+  }
+  
+  console.log('[PDF Engine] Launching new Puppeteer instance...');
+  globalBrowser = await puppeteer.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process'
+    ]
+  });
+  return globalBrowser;
 }
 
 export function buildVerificationUrl(cert: CertificateData | string, customDomain?: string): string {
@@ -88,18 +113,35 @@ export async function generateCertificatePDF(
   
   html = html.replace('{{TABLE_ROWS}}', tableRows);
 
-  // Generate PDF
-  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'load' });
-  const pdfBytes = await page.pdf({ format: 'A4', printBackground: true });
-  await browser.close();
-
-  return { 
-    pdfBytes: new Uint8Array(pdfBytes), 
-    qrDataUrl, 
-    verificationUrl, 
-    sha256Hash, 
-    fileName: `${certData.line_items?.[0]?.site_id || 'Unknown'}_${certData.client.replace(/[^a-zA-Z0-9-_]/g, '_')}_${certData.cert_id}.pdf` 
-  };
+  let page;
+  try {
+    const browser = await getBrowser();
+    page = await browser.newPage();
+    
+    // Set a timeout for the entire operation
+    await page.setDefaultTimeout(30000);
+    
+    await page.setContent(html, { waitUntil: 'load' });
+    const pdfBuffer = await page.pdf({ 
+      format: 'A4', 
+      printBackground: true,
+      margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' }
+    });
+    
+    return { 
+      pdfBytes: new Uint8Array(pdfBuffer), 
+      qrDataUrl, 
+      verificationUrl, 
+      sha256Hash, 
+      fileName: `${certData.line_items?.[0]?.site_id || 'Unknown'}_${certData.client.replace(/[^a-zA-Z0-9-_]/g, '_')}_${certData.cert_id}.pdf` 
+    };
+  } catch (err: any) {
+    console.error(`[PDF Engine] Error generating PDF for ${certData.cert_id}:`, err);
+    throw new Error(`PDF generation failed: ${err.message}`);
+  } finally {
+    if (page) {
+      await page.close().catch(e => console.error('[PDF Engine] Error closing page:', e));
+    }
+  }
 }
+
