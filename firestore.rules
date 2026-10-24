@@ -27,14 +27,14 @@ service cloud.firestore {
 
     match /certificates/{certId} {
       allow get: if true;
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(certId) && isValidCertificate(incoming());
-      allow update: if isSignedIn() && isValidCertificate(incoming()) && incoming().cert_id == existing().cert_id;
+      allow list: if true;
+      allow create: if isValidId(certId) && isValidCertificate(incoming());
+      allow update: if isValidCertificate(incoming()) && incoming().cert_id == existing().cert_id;
       
       match /audit_trail/{auditId} {
-        allow get: if isSignedIn();
-        allow list: if isSignedIn();
-        allow create: if isSignedIn() && isValidId(auditId) && isValidAudit(incoming()) && incoming().cert_id == certId;
+        allow get: if true;
+        allow list: if true;
+        allow create: if isValidId(auditId) && isValidAudit(incoming()) && incoming().cert_id == certId;
       }
     }
   }
