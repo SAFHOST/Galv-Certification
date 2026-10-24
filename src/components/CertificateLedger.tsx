@@ -326,6 +326,7 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
                 <th className="py-3 px-4">Allocated Sites</th>
                 <th className="py-3 px-4 text-center">Articles</th>
                 <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4">Audit Trail</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -407,6 +408,19 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
                           {isAuth ? <ShieldCheck className="w-3 h-3 text-emerald-600" /> : <AlertTriangle className="w-3 h-3 text-rose-600" />}
                           {isAuth ? 'AUTHENTIC' : 'REVOKED'}
                         </span>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="text-[10px] text-slate-500 font-mono">
+                          {cert.audit_trail ? (
+                             <>
+                              <div>IP: {cert.audit_trail.issuance_ip}</div>
+                              <div className="truncate max-w-[120px]" title={cert.audit_trail.location}>
+                                Loc: {cert.audit_trail.location}
+                              </div>
+                             </>
+                          ) : 'N/A'}
+                        </div>
                       </td>
 
                       <td

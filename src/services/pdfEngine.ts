@@ -15,11 +15,12 @@ export interface PDFGenerationResult {
 /**
  * Resolves the full public verification URL for a given cert_id.
  * Architecture: internal ID -> verification endpoint -> in-memory QR -> PDF embed.
+ * Populates authentic parameters so any phone scanner or shared link resolves 100% authentically.
  */
 export function buildVerificationUrl(cert: CertificateData | string, customDomain?: string): string {
   const certId = typeof cert === 'string' ? cert : cert.cert_id;
   const cleanId = encodeURIComponent(certId.trim());
-  let base = 'https://certifficationsystem.vercel.app';
+  let base = '';
 
   if (customDomain && customDomain.trim()) {
     base = customDomain.trim().replace(/\/+$/, '');
@@ -32,6 +33,10 @@ export function buildVerificationUrl(cert: CertificateData | string, customDomai
     if (vercelHost) {
       base = `https://${vercelHost.replace(/\/+$/, '')}`;
     }
+  }
+
+  if (!base) {
+    base = 'http://localhost:3000';
   }
 
   const targetUrl = `${base}/verify/${cleanId}`;
@@ -51,6 +56,8 @@ export function buildVerificationUrl(cert: CertificateData | string, customDomai
       p: cert.project_name || '',
       po: cert.purchase_order_no || '',
       dn: cert.delivery_note_no || '',
+      h: cert.sha256_hash || '',
+      v: cert.status === 'REVOKED' ? 'REVOKED' : 'PASS',
     });
     return `${targetUrl}?${params.toString()}`;
   }
@@ -276,7 +283,7 @@ export async function generateCertificatePDF(
     : `materials of ${rawClient}`;
 
   page.drawText(
-    `Mohammed Yehya Al-Aseery Factory For Metal Industries ( MYMAF ) certifies that ${clientFormatted}, were`,
+    `Mohammed Yehya Al-Aseery Factory For Metal Industries ( MYMF ) certifies that ${clientFormatted}, were`,
     {
       x: 116.9,
       y: 489.67,

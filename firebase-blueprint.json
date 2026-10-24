@@ -1,0 +1,25 @@
+{
+  "entities": {
+    "Certificate": {
+      "title": "Certificate",
+      "description": "An inspection certificate record",
+      "type": "object",
+      "properties": {
+        "cert_id": { "type": "string" },
+        "issue_date": { "type": "string" },
+        "client": { "type": "string" },
+        "project_name": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string" },
+        "sha256_hash": { "type": "string" }
+      },
+      "required": ["cert_id", "status"]
+    }
+  },
+  "firestore": {
+    "/certificates/{certId}": {
+      "schema": { "$ref": "#/entities/Certificate" },
+      "description": "Certificates collection"
+    }
+  }
+}

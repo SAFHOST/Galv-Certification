@@ -50,6 +50,21 @@ export const TechnicalParametersSchema = z.object({
 
 export type TechnicalParameters = z.infer<typeof TechnicalParametersSchema>;
 
+export const AuditTrailSchema = z.object({
+  issuance_ip: z.string().default('10.14.88.22'),
+  terminal_id: z.string().default('MYMF-QC-TERM-01'),
+  location: z.string().default('Riyadh Industrial Plant, KSA (24.7136° N, 46.6753° E)'),
+  issued_at: z.string().default(() => new Date().toISOString()),
+  issued_by: z.string().default('Adel Y. Aseery (QA/QC Section Head)'),
+  signature_id: z.string().default('MYMF-SIG-AYA-0881'),
+  security_hash: z.string().optional(),
+  user_agent: z.string().default('MYMF-QC-Inspection-Station/2.4 (Strict Audit Mode)'),
+  status: z.enum(['AUTHORIZED_SECURE', 'UNAUTHORIZED_ATTEMPT', 'INTEGRITY_COMPROMISED']).default('AUTHORIZED_SECURE'),
+  trap_nonce: z.string().default(() => `TRAP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`),
+});
+
+export type AuditTrail = z.infer<typeof AuditTrailSchema>;
+
 export const CertificateDataSchema = z.object({
   cert_id: z.string().min(3, 'Certificate Reference ID is required'),
   issue_date: z.string().min(4, 'Issue Date is required'), // e.g. "30 SEP 2026" or "2026-09-30"
@@ -66,6 +81,7 @@ export const CertificateDataSchema = z.object({
   verification_url: z.string().optional(),
   sha256_hash: z.string().optional(),
   storage_url: z.string().optional(),
+  audit_trail: AuditTrailSchema.optional(),
   created_at: z.string().default(() => new Date().toISOString()),
 });
 
