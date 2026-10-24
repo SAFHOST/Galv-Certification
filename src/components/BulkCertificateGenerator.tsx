@@ -121,8 +121,9 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
           onDrop={(e) => { e.preventDefault(); setIsDragging(false); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); }}
           className={'border-2 border-dashed ' + (isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 bg-slate-50') + ' h-40 flex flex-col items-center justify-center rounded-xl cursor-pointer'}
         >
+          <input type="file" className="hidden" onChange={(e) => { if(e.target.files?.[0]) processFile(e.target.files[0]); }} />
           <Upload className="w-8 h-8 text-slate-400 mb-2" />
-          <span className="text-sm font-semibold">Drop Excel File to Generate & Download</span>
+          <span className="text-sm font-semibold">Click to upload or Drop Excel File</span>
         </label>
       </div>
 
