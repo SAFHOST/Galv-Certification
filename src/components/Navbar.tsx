@@ -2,7 +2,7 @@ import React from 'react';
 import { ShieldCheck, Plus, LogOut, Lock, UserCheck } from 'lucide-react';
 import type { AuthUser } from '../services/auth';
 
-export type ActiveTab = 'ledger' | 'generate' | 'bulk' | 'verify' | 'architecture' | 'login';
+export type ActiveTab = 'ledger' | 'generate' | 'bulk' | 'verify' | 'architecture' | 'login' | 'landing';
 
 interface NavbarProps {
   activeTab: ActiveTab;

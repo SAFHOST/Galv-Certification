@@ -11,13 +11,14 @@ import { StaffLogin } from './components/StaffLogin';
 import { QRScannerModal } from './components/QRScannerModal';
 import { QRDisplayModal } from './components/QRDisplayModal';
 import { PDFPreviewModal } from './components/PDFPreviewModal';
+import { LandingPage } from './components/LandingPage';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => authService.isAuthenticated());
 
-  // Navigation & View state - Default to Login UI on landing
-  const [activeTab, setActiveTab] = useState<ActiveTab>('login');
+  // Navigation & View state - Default to Landing page
+  const [activeTab, setActiveTab] = useState<ActiveTab>('landing');
   const [selectedCertId, setSelectedCertId] = useState<string>('MYF-QC-26-239');
   const [isPublicVerificationMode, setIsPublicVerificationMode] = useState<boolean>(false);
 
@@ -57,7 +58,7 @@ export default function App() {
           setActiveTab('ledger');
         } else {
           setIsPublicVerificationMode(false);
-          setActiveTab('login');
+          setActiveTab('landing');
         }
       }
     };
@@ -71,6 +72,18 @@ export default function App() {
     if (tab === 'login') {
       setIsPublicVerificationMode(false);
       setActiveTab('login');
+      return;
+    }
+    
+    if (tab === 'landing') {
+      setIsPublicVerificationMode(false);
+      setActiveTab('landing');
+      return;
+    }
+    
+    if (tab === 'landing') {
+      setIsPublicVerificationMode(false);
+      setActiveTab('landing');
       return;
     }
 
@@ -164,15 +177,21 @@ export default function App() {
           />
         )}
 
+        {/* LANDING PAGE */}
+        {activeTab === 'landing' && (
+          <LandingPage
+            onNavigateToLogin={() => navigateToTab('login')}
+            onNavigateToVerify={() => navigateToTab('verify')}
+          />
+        )}
+
         {/* STAFF LOGIN VIEW */}
         {activeTab === 'login' && !isAuthenticated && (
           <StaffLogin
             onSuccess={handleLoginSuccess}
             onNavigateToVerify={handleOpenVerification}
             onOpenScanner={() => setIsScannerOpen(true)}
-            onCancel={() => {
-              handleOpenVerification(selectedCertId || 'MYF-QC-26-239');
-            }}
+            onCancel={() => navigateToTab('landing')}
           />
         )}
 
