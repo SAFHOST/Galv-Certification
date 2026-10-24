@@ -148,7 +148,7 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
   const isTampered = result.status === 'TAMPERED';
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6">
+    <div className="max-w-md mx-auto px-4 py-8 space-y-6">
       {/* Toast Feedback */}
       {actionMessage && (
         <div className="p-3 bg-slate-900 text-white rounded-lg text-xs flex items-center justify-between shadow-md">
@@ -157,283 +157,32 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
         </div>
       )}
 
-      {/* Main Status Verification Banner */}
-      <div
-        className={`rounded-xl border p-4 sm:p-6 transition-colors shadow-xs ${
-          isAuthentic
-            ? 'bg-emerald-50/70 border-emerald-300'
-            : isTampered
-            ? 'bg-rose-50 border-rose-300'
-            : 'bg-amber-50 border-amber-300'
-        }`}
-      >
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start gap-3">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                isAuthentic
-                  ? 'bg-emerald-600 text-white'
-                  : isTampered
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-amber-600 text-white'
-              }`}
-            >
-              {isAuthentic && <ShieldCheck className="w-6 h-6" />}
-              {isTampered && <ShieldAlert className="w-6 h-6" />}
-              {isRevoked && <AlertTriangle className="w-6 h-6" />}
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span
-                  className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-md ${
-                    isAuthentic
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : isTampered
-                      ? 'bg-rose-100 text-rose-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}
-                >
-                  {result.status_title}
-                </span>
-                <span className="text-[10px] text-slate-500 font-mono truncate">
-                  Ref: {cert.cert_id}
-                </span>
-              </div>
-
-              <h1 className="text-sm font-extrabold text-slate-900 mt-1 leading-tight">
-                {isAuthentic
-                  ? 'Official Inspection Verified'
-                  : isTampered
-                  ? 'Tampering Detected'
-                  : 'Document Revoked'}
-              </h1>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => onOpenPdf(cert)}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-slate-900 bg-white border border-slate-300 rounded-lg shadow-2xs cursor-pointer"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              PDF
-            </button>
-            <button
-              onClick={() => onOpenQR(cert)}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg cursor-pointer"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              QR
-            </button>
-          </div>
+      {/* Simplified Verification Result */}
+      <div className={`rounded-2xl border p-6 text-center space-y-4 shadow-md ${
+        isAuthentic ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
+      }`}>
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
+          isAuthentic ? 'bg-emerald-500' : 'bg-rose-500'
+        }`}>
+          <CheckCircle2 className="w-8 h-8 text-white" />
+        </div>
+        
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">
+            {isAuthentic ? 'Verified Authentic' : 'Verification Failed'}
+          </h2>
+          <p className="text-xs text-slate-600 mt-1">
+            Certificate ID: <span className="font-mono font-semibold">{cert.cert_id}</span>
+          </p>
         </div>
 
-        {/* Verification Metadata Footnote */}
-        <div className="mt-4 pt-3 border-t border-slate-200/60 text-[10px] text-slate-500">
-           <div className="flex justify-between items-center gap-2">
-            <span>Verified: {new Date(result.verified_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            <button
-              onClick={handleCopyUrl}
-              className="flex items-center gap-1 text-slate-600 hover:text-slate-900 cursor-pointer font-medium"
-            >
-              {copiedUrl ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-              <span>{copiedUrl ? 'Copied' : 'Share'}</span>
-            </button>
-           </div>
-        </div>
-      </div>
-
-      {/* Authentic Physical Document Representation */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-md p-4 sm:p-8 font-sans space-y-4">
-        {/* Document Header */}
-        <div className="flex flex-col items-center text-center gap-3 pb-3 border-b border-slate-100">
-            <img
-              src="/assets/template/mymf_logo.jpg"
-              alt="MYMF Steel Fabricator Logo"
-              className="h-12 object-contain"
-            />
-            <div className="text-[10px] space-y-0.5 text-slate-800">
-                <div className="font-bold text-xs text-slate-900">Mohammed Yehya Al-Aseery</div>
-                <div className="text-slate-600">For Metal Industries</div>
-                <div className="font-mono pt-0.5">CR NO: 1010207045</div>
-            </div>
-        </div>
-
-        {/* Header Horizontal Line */}
-        <div className="w-full h-[1px] bg-black"></div>
-
-        {/* Title & Date Block */}
-        <div className="relative flex flex-col items-center justify-center text-center py-2">
-          {/* Red Date on Left */}
-          <div className="sm:absolute left-0 top-3 text-red-700 font-bold text-xs uppercase tracking-wider">
-            {cert.issue_date}
-          </div>
-
-          {/* Center Title */}
-          <div>
-            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-widest text-slate-900 underline underline-offset-4 decoration-1">
-              CERTIFICATE
-            </h2>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-700 mt-1">
-              HOT-DIP-GALVANIZATION
-            </div>
-          </div>
-        </div>
-
-        {/* Attestation Certification Paragraph */}
-        <div className="text-xs sm:text-sm text-slate-900 leading-relaxed pt-2">
-          Mohammed Yehya Al-Aseery Factory For Metal Industries ( MYMAF ) certifies that{' '}
-          {cert.client.toLowerCase().startsWith('materials of') ? cert.client : `materials of ${cert.client}`}, were
-          hot dip galvanized in conformance to BS EN ISO 1461 Standard.
-        </div>
-
-        {/* Official Line Items Table with crisp black borders */}
-        <div className="overflow-x-auto pt-2">
-          <table className="w-full text-left text-xs border border-black border-collapse">
-            <thead>
-              <tr className="border-b border-black font-bold text-slate-900 text-center">
-                <th className="py-2 px-3 border-r border-black w-16">Item #</th>
-                <th className="py-2 px-3 border-r border-black w-24">Site #</th>
-                <th className="py-2 px-4 border-r border-black text-center">Description</th>
-                <th className="py-2 px-3 border-r border-black w-20">Quantity</th>
-                <th className="py-2 px-3 w-16">Unit</th>
-              </tr>
-            </thead>
-            <tbody className="text-slate-900 font-normal">
-              {(cert.line_items || []).map((item, idx) => (
-                <tr key={idx} className="border-b border-black text-center">
-                  <td className="py-2.5 px-3 border-r border-black font-mono">{item.item_no}</td>
-                  <td className="py-2.5 px-3 border-r border-black font-mono font-bold">{item.site_id}</td>
-                  <td className="py-2.5 px-4 border-r border-black text-center font-medium">
-                    {item.description}
-                  </td>
-                  <td className="py-2.5 px-3 border-r border-black font-mono font-bold">{item.quantity}</td>
-                  <td className="py-2.5 px-3 font-mono">{item.unit}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Official Sign-off, Stamp & Dynamic QR Code Block */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-end pt-6">
-          {/* Left: Organization & Sign-off Head with Signature */}
-          <div className="space-y-1 text-xs text-slate-900">
-            <div className="font-semibold text-slate-800">
-              Mohammed Yehya Al-Aseery Factory For
-            </div>
-            <div className="font-semibold text-slate-800">Metal Industries</div>
-            <div className="font-bold text-slate-900 tracking-wider">MYMAF</div>
-
-            {/* Exact Official Signature from Template */}
-            <div className="py-1">
-              <img
-                src="/assets/template/adel_signature.jpg"
-                alt="Adel Y. Aseery Signature"
-                className="h-10 object-contain"
-              />
-            </div>
-
-            <div className="pt-1">
-              <div className="font-bold text-slate-900 border-b border-black pb-0.5 inline-block min-w-[130px]">
-                {cert.sign_off?.name || 'Adel Y.Aseery.'}
-              </div>
-              <div className="text-[11px] text-slate-700 mt-0.5">
-                {cert.sign_off?.role || 'Quality Section Head'}
-              </div>
-            </div>
-          </div>
-
-          {/* Center: Exact Blue Arabic Official Stamp from Template */}
-          <div className="flex flex-col items-center justify-center text-center">
-            <img
-              src="/assets/template/mymf_stamp.jpg"
-              alt="Official Stamp مصنع محمد يحيى العسيري"
-              className="h-20 object-contain shadow-xs border border-blue-100"
-            />
-            <span className="text-[9px] text-slate-400 font-mono mt-1">OFFICIAL MYMF STAMP AFFIXED</span>
-          </div>
-
-          {/* Right: Dynamic Embedded Verification QR Code */}
-          <div className="flex flex-col items-center sm:items-end justify-center">
-            <div className="border border-black p-1 bg-white">
-              <img
-                src={`/api/verify/${encodeURIComponent(cert.cert_id)}`}
-                onError={(e) => {
-                  // Fallback to QR modal data or direct QR
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-                alt="QR Code"
-                className="hidden"
-              />
-              <div className="w-20 h-20 bg-white flex items-center justify-center">
-                {/* Embedded Dynamic QR Code strictly matching certificate */}
-                {qrDataUrl ? (
-                  <img
-                    src={qrDataUrl}
-                    alt={`Dynamic QR Code for ${cert.cert_id}`}
-                    className="w-20 h-20 object-contain"
-                  />
-                ) : (
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                      `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`
-                    )}`}
-                    alt="Dynamic QR Code"
-                    className="w-20 h-20 object-contain"
-                  />
-                )}
-              </div>
-            </div>
-            <span className="text-[9px] font-mono text-slate-500 mt-1">SCAN TO VERIFY</span>
-          </div>
-        </div>
-
-        {/* Template Footer with Kingdom Address */}
-        <div className="pt-6 border-t border-slate-300 flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-600 gap-2">
-          <div>
-            <div>Kingdom Of Saudi Arabia</div>
-            <div className="text-[11px]">PO Box NO: 370372 Riyadh 11325</div>
-          </div>
-          <div className="text-right font-arabic self-end sm:self-center">
-            <div>المملكة العربية السعودية ص.ب :</div>
-            <div className="text-[11px] font-mono">370372   الرياض   11325</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Cryptographic Tamper-Detection Invariant Box */}
-      <div className="bg-slate-900 text-slate-200 rounded-xl p-5 shadow-xs">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-              SHA-256 Tamper-Detection Fingerprint
-            </h4>
-          </div>
-
-          <button
-            onClick={handleCopyHash}
-            className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
-          >
-            {copiedHash ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-            {copiedHash ? 'Hash Copied' : 'Copy Hash'}
-          </button>
-        </div>
-
-        <div className="mt-3 font-mono text-xs break-all bg-slate-950 p-3 rounded-lg border border-slate-800 text-slate-300 select-all">
-          {cert.sha256_hash || 'SHA-256 fingerprint not recorded'}
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400">
-          <div>
-            Canonical Invariant: <span className="text-slate-200">ISO 1461 Specifications & Line Items</span>
-          </div>
-          <div className="sm:text-right">
-            Integrity Check: <span className="text-emerald-400 font-semibold">{isAuthentic ? 'Cryptographically Genuine' : 'Failed Integrity Check'}</span>
-          </div>
-        </div>
+        <button
+          onClick={() => onOpenPdf(cert)}
+          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+        >
+          <Download className="w-4 h-4" />
+          Download Certificate
+        </button>
       </div>
 
       {/* Inspector Audit & Demonstration Controls (Visible Only to Authenticated Staff) */}
@@ -442,40 +191,18 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
           <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
             Staff QA/QC Evaluator Controls
           </div>
-          <p className="text-xs text-slate-500 mb-3">
-            Simulate field inspection conditions or test the cryptographic tamper detection engine:
-          </p>
-
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleTamperTest}
               className="px-3 py-1.5 text-xs font-medium text-rose-700 bg-white hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors cursor-pointer"
-              title="Alters line item quantities to trigger immediate cryptographic hash failure"
             >
-              Simulate Document Tampering (Test Hash Mismatch)
+              Simulate Tampering
             </button>
-
             <button
               onClick={handleToggleRevoke}
               className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-white hover:bg-amber-50 border border-amber-200 rounded-lg transition-colors cursor-pointer"
             >
-              {isRevoked ? 'Reinstate Certificate' : 'Revoke Certificate (Test Status)'}
-            </button>
-
-            <button
-              onClick={handleReset}
-              className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-            >
-              <RefreshCw className="w-3 h-3 text-slate-500" />
-              Reset to Original
-            </button>
-
-            <button
-              onClick={() => onOpenPdf(cert)}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ml-auto"
-            >
-              <Download className="w-3 h-3" />
-              Download PDF
+              {isRevoked ? 'Reinstate' : 'Revoke'}
             </button>
           </div>
         </div>
