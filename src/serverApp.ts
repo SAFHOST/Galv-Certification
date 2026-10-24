@@ -321,3 +321,5 @@ export function createExpressApp() {
 
   return app;
 }
+
+export default createExpressApp;

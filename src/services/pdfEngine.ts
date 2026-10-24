@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFImage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import QRCode from 'qrcode';
+import arabicReshaper from 'arabic-reshaper';
 import type { CertificateData } from '../types/certificate';
 import { generateSHA256Hash, getCanonicalCertificatePayload } from './security';
 import { PDF_ASSETS } from './pdfAssets';
@@ -11,6 +12,23 @@ export interface PDFGenerationResult {
   verificationUrl: string;
   sha256Hash: string;
   fileName: string;
+}
+
+/**
+ * Reshapes and reverses Arabic text for pdf-lib rendering
+ */
+function fixArabicText(text: string): string {
+  if (!text) return '';
+  // Check if text contains Arabic characters
+  if (!/[\u0600-\u06FF]/.test(text)) return text;
+  
+  try {
+    const reshaped = arabicReshaper.reshape(text);
+    return reshaped.split('').reverse().join('');
+  } catch (e) {
+    console.warn('[PDF Engine] Arabic reshaping failed:', e);
+    return text;
+  }
 }
 
 export async function generateQRCodeDataUrl(text: string): Promise<string> {
@@ -85,41 +103,43 @@ export async function generateCertificatePDF(
   // Left: English Details
   page.drawText("Mohammed Yehya Al-Aseery\nFor Metal Industries\nCR No: 1010997047\nVAT No: 302154658900006", {
     x: 40,
-    y: height - 50,
-    size: 8.5,
+    y: height - 40,
+    size: 8,
     font: fontRegular,
-    lineHeight: 12,
+    lineHeight: 11,
     color: rgb(0.1, 0.1, 0.1),
   });
 
-  // Center: Logo (Increase size as requested)
-  await drawBase64Image(PDF_ASSETS.images.logo, width / 2 - 30, height - 75, 60, 60);
+  // Center: Logo (Increased size by 50% as requested: from 60x60 to 90x90)
+  await drawBase64Image(PDF_ASSETS.images.logo, width / 2 - 45, height - 95, 90, 90);
 
-  // Right: Arabic Details (RTL)
-  // Note: pdf-lib doesn't handle RTL/reshaping automatically. 
-  // We'll use the pre-reshaped text or draw simple blocks if needed.
-  page.drawText("مصنع محمد يحيى العسيري\nللصناعات المعدنية\nس.ت: 1010997047\nالرقم الضريبي: 302154658900006", {
-    x: width - 40,
-    y: height - 50,
-    size: 9.5,
-    font: fontArabic,
-    lineHeight: 12,
-    color: rgb(0.1, 0.1, 0.1),
-  });
+  // Right: Arabic Details (RTL reshaped)
+  const arabicLine1 = fixArabicText("مصنع محمد يحيى العسيري");
+  const arabicLine2 = fixArabicText("للصناعات المعدنية");
+  const arabicLine3 = fixArabicText("س.ت: 1010997047");
+  const arabicLine4 = fixArabicText("الرقم الضريبي: 302154658900006");
+
+  const arabicX = width - 40;
+  const arabicY = height - 40;
+  
+  page.drawText(arabicLine1, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine1, 10), y: arabicY, size: 10, font: fontArabic });
+  page.drawText(arabicLine2, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine2, 10), y: arabicY - 12, size: 10, font: fontArabic });
+  page.drawText(arabicLine3, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine3, 10), y: arabicY - 24, size: 10, font: fontArabic });
+  page.drawText(arabicLine4, { x: arabicX - fontArabic.widthOfTextAtSize(arabicLine4, 10), y: arabicY - 36, size: 10, font: fontArabic });
 
   // Top Divider
   page.drawLine({
-    start: { x: 40, y: height - 90 },
-    end: { x: width - 40, y: height - 90 },
-    thickness: 1.5,
+    start: { x: 40, y: height - 105 },
+    end: { x: width - 40, y: height - 105 },
+    thickness: 1,
     color: rgb(0, 0, 0),
   });
 
   // 5. Certificate Title
   page.drawText("HOT DIP GALVANIZATION CERTIFICATE", {
     x: width / 2 - 130,
-    y: height - 120,
-    size: 13,
+    y: height - 130,
+    size: 14,
     font: fontBold,
     color: rgb(0, 0, 0),
   });
@@ -127,14 +147,14 @@ export async function generateCertificatePDF(
   // 6. Metadata Row
   page.drawText(`Cert. Ref. No.: ${certData.cert_id}`, {
     x: 40,
-    y: height - 145,
+    y: height - 160,
     size: 10,
     font: fontBold,
   });
 
   page.drawText(`Date: ${certData.issue_date}`, {
     x: width - 150,
-    y: height - 145,
+    y: height - 160,
     size: 10,
     font: fontBold,
   });
@@ -146,43 +166,43 @@ export async function generateCertificatePDF(
     .replace(/^M\/S\s+/i, '')
     .trim();
 
-  const bodyText = `Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMAF) certifies that the materials of M/S ${cleanClientName} were hot-dip galvanized in conformance with BS EN ISO 1461 Standard.`;
+  const bodyText = `Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMF) certifies that the materials of M/S ${cleanClientName} were hot-dip galvanized in conformance with BS EN ISO 1461 Standard.`;
   
   page.drawText(bodyText, {
     x: 40,
-    y: height - 180,
+    y: height - 200,
     size: 10,
     font: fontRegular,
     maxWidth: width - 80,
-    lineHeight: 14,
+    lineHeight: 15,
   });
 
   // 8. Line Items Table
-  const tableTop = height - 230;
-  const colWidths = [40, 140, 240, 50, 50]; // Item#, Site#, Desc, Qty, Unit
-  const colX = [40, 80, 220, 460, 510];
+  let tableY = height - 250;
+  
+  // Headers
+  const colX = [40, 80, 220, 470, 520];
   const headers = ['Item #', 'Site #', 'Description', 'Qty', 'Unit'];
-
-  // Table Header Row
+  
   page.drawRectangle({
     x: 40,
-    y: tableTop - 15,
+    y: tableY - 15,
     width: width - 80,
     height: 20,
-    color: rgb(0.9, 0.9, 0.9),
+    color: rgb(0.95, 0.95, 0.95),
   });
 
   headers.forEach((h, i) => {
     page.drawText(h, {
       x: colX[i],
-      y: tableTop - 2,
+      y: tableY - 2,
       size: 9,
       font: fontBold,
     });
   });
 
-  // Rows
-  let currentY = tableTop - 35;
+  // Row Data
+  tableY -= 35;
   certData.line_items?.forEach((item, idx) => {
     const row = [
       (idx + 1).toString(),
@@ -195,54 +215,62 @@ export async function generateCertificatePDF(
     row.forEach((text, i) => {
       page.drawText(text, {
         x: colX[i],
-        y: currentY,
+        y: tableY,
         size: 9,
         font: fontRegular,
-        maxWidth: i === 2 ? 230 : undefined,
+        maxWidth: i === 2 ? 240 : undefined,
       });
     });
 
-    currentY -= 20;
+    tableY -= 20;
     
-    // Horizontal line after each row
+    // Row line
     page.drawLine({
-      start: { x: 40, y: currentY + 15 },
-      end: { x: width - 40, y: currentY + 15 },
+      start: { x: 40, y: tableY + 15 },
+      end: { x: width - 40, y: tableY + 15 },
       thickness: 0.5,
-      color: rgb(0.8, 0.8, 0.8),
+      color: rgb(0.9, 0.9, 0.9),
     });
   });
 
-  // 9. QR Code
+  // 9. QR Code (Bottom Left)
   const qrImgBytes = Uint8Array.from(atob(qrCodeDataUrl.split(',')[1]), c => c.charCodeAt(0));
   const qrImg = await pdfDoc.embedPng(qrImgBytes);
   page.drawImage(qrImg, {
     x: 40,
-    y: 60,
+    y: 70,
     width: 80,
     height: 80,
   });
 
+  page.drawText(fixArabicText("امسح للتحقق من صحة الشهادة"), {
+    x: 40 + 40 - (fontArabic.widthOfTextAtSize(fixArabicText("امسح للتحقق من صحة الشهادة"), 7) / 2),
+    y: 60,
+    size: 7,
+    font: fontArabic,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+
   page.drawText("Scan to verify authenticity", {
-    x: 40,
+    x: 40 + 40 - (fontRegular.widthOfTextAtSize("Scan to verify authenticity", 7) / 2),
     y: 50,
     size: 7,
     font: fontRegular,
     color: rgb(0.4, 0.4, 0.4),
   });
 
-  // 10. Signature & Stamp
-  // Right side bottom
-  const sigX = width - 180;
-  await drawBase64Image(PDF_ASSETS.images.signature, sigX, 100, 120, 40);
-  await drawBase64Image(PDF_ASSETS.images.stamp, sigX + 40, 70, 70, 70);
+  // 10. Signature & Stamp (Bottom Right)
+  const rightX = width - 200;
+  await drawBase64Image(PDF_ASSETS.images.signature, rightX + 20, 110, 140, 50);
+  await drawBase64Image(PDF_ASSETS.images.stamp, rightX + 60, 70, 80, 80);
 
   page.drawText("Adel Y. Aseery\nQuality Section Head", {
-    x: sigX + 10,
+    x: rightX + 40,
     y: 60,
-    size: 9,
+    size: 10,
     font: fontBold,
     lineHeight: 12,
+    color: rgb(0, 0, 0),
   });
 
   // 11. Footer
@@ -253,8 +281,9 @@ export async function generateCertificatePDF(
     color: rgb(0, 0, 0),
   });
 
-  page.drawText("PO Box 370372, Riyadh 11325, KSA | Tel: +966 11 498 2211 | Email: qc@mymf.com.sa", {
-    x: width / 2 - 180,
+  const footerText = "PO Box 370372, Riyadh 11325, KSA | Tel: +966 11 498 2211 | Email: qc@mymf.com.sa";
+  page.drawText(footerText, {
+    x: width / 2 - (fontRegular.widthOfTextAtSize(footerText, 8) / 2),
     y: 25,
     size: 8,
     font: fontRegular,
@@ -273,3 +302,4 @@ export async function generateCertificatePDF(
     fileName,
   };
 }
+
