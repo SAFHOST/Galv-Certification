@@ -21,11 +21,8 @@ export const QRDisplayModal: React.FC<QRDisplayModalProps> = ({
 
   if (!isOpen || !certificate) return null;
 
-  const verificationUrl =
-    certificate.verification_url ||
-    (typeof window !== 'undefined'
-      ? `${window.location.origin}/verify/${encodeURIComponent(certificate.cert_id)}`
-      : `/verify/${certificate.cert_id}`);
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const verificationUrl = `${currentOrigin}/verify/${encodeURIComponent(certificate.cert_id)}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(verificationUrl);

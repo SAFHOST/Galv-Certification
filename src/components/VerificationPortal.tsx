@@ -19,6 +19,7 @@ import {
 import type { CertificateData, VerificationResult } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
 import { formatHashDigest } from '../services/security';
+import { generateQRCodeDataUrl } from '../services/pdfEngine';
 
 interface VerificationPortalProps {
   certId: string;
@@ -37,6 +38,7 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
 }) => {
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -46,6 +48,17 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
     try {
       const res = await certificateRepository.verify(certId);
       setResult(res);
+
+      if (res && res.certificate) {
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const targetUrl = `${origin}/verify/${encodeURIComponent(res.certificate.cert_id)}`;
+        try {
+          const qr = await generateQRCodeDataUrl(targetUrl);
+          setQrDataUrl(qr);
+        } catch {
+          // Fallback to online image
+        }
+      }
     } catch (err) {
       console.error('Verification error', err);
     } finally {
@@ -381,14 +394,22 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
                 className="hidden"
               />
               <div className="w-20 h-20 bg-white flex items-center justify-center">
-                {/* Embedded Dynamic QR Code */}
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                    cert.verification_url || window.location.href
-                  )}`}
-                  alt="Dynamic QR Code"
-                  className="w-20 h-20 object-contain"
-                />
+                {/* Embedded Dynamic QR Code strictly matching certificate */}
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt={`Dynamic QR Code for ${cert.cert_id}`}
+                    className="w-20 h-20 object-contain"
+                  />
+                ) : (
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                      `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`
+                    )}`}
+                    alt="Dynamic QR Code"
+                    className="w-20 h-20 object-contain"
+                  />
+                )}
               </div>
             </div>
             <span className="text-[9px] font-mono text-slate-500 mt-1">SCAN TO VERIFY</span>

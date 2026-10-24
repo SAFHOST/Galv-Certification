@@ -2,7 +2,7 @@ import React from 'react';
 import { ShieldCheck, Plus, LogOut, Lock, UserCheck } from 'lucide-react';
 import type { AuthUser } from '../services/auth';
 
-export type ActiveTab = 'ledger' | 'generate' | 'verify' | 'architecture' | 'login';
+export type ActiveTab = 'ledger' | 'generate' | 'bulk' | 'verify' | 'architecture' | 'login';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -127,7 +127,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   activeTab === 'generate' ? 'text-slate-900 font-semibold border-b-2 border-slate-900 py-5 -mb-[2px]' : ''
                 }`}
               >
-                Generate Certificate
+                Generate Single
+              </button>
+              <button
+                onClick={() => onSelectTab('bulk')}
+                className={`inline-flex items-center gap-1.5 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  activeTab === 'bulk' ? 'text-slate-900 font-semibold border-b-2 border-slate-900 py-5 -mb-[2px]' : ''
+                }`}
+              >
+                <span>Bulk Excel (50+ Sites)</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded">ZIP</span>
               </button>
               <button
                 onClick={() => onSelectTab('verify')}
@@ -207,7 +216,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onSelectTab('generate')}
               className={`whitespace-nowrap shrink-0 py-1 ${activeTab === 'generate' ? 'text-slate-900 font-bold' : ''}`}
             >
-              Generate Certificate
+              Generate Single
+            </button>
+            <span className="text-slate-300">·</span>
+            <button
+              onClick={() => onSelectTab('bulk')}
+              className={`whitespace-nowrap shrink-0 py-1 ${activeTab === 'bulk' ? 'text-slate-900 font-bold' : ''}`}
+            >
+              Bulk Excel (ZIP)
             </button>
             <span className="text-slate-300">·</span>
             <button

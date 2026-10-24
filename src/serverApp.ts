@@ -138,6 +138,40 @@ export function createExpressApp() {
     }
   });
 
+  // Save/Upsert single certificate directly
+  apiRouter.post('/certificates/save', async (req, res) => {
+    try {
+      const cert = req.body;
+      if (!cert || !cert.cert_id) {
+        res.status(400).json({ success: false, error: 'Invalid certificate payload' });
+        return;
+      }
+      await certificateRepository.save(cert);
+      res.status(200).json({ success: true, message: 'Certificate saved to registry', cert_id: cert.cert_id });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Bulk save array of certificates
+  apiRouter.post('/certificates/bulk-save', async (req, res) => {
+    try {
+      const certs = req.body;
+      if (!Array.isArray(certs) || certs.length === 0) {
+        res.status(400).json({ success: false, error: 'Expected non-empty array of certificates' });
+        return;
+      }
+      for (const cert of certs) {
+        if (cert && cert.cert_id) {
+          await certificateRepository.save(cert);
+        }
+      }
+      res.status(200).json({ success: true, count: certs.length, message: `Successfully saved ${certs.length} certificates` });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Public Verification API Endpoint
   apiRouter.get('/verify/:id', async (req, res) => {
     try {

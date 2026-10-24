@@ -5,6 +5,7 @@ import { authService, type AuthUser } from './services/auth';
 import { Navbar, type ActiveTab } from './components/Navbar';
 import { CertificateLedger } from './components/CertificateLedger';
 import { CertificateGenerator } from './components/CertificateGenerator';
+import { BulkCertificateGenerator } from './components/BulkCertificateGenerator';
 import { VerificationPortal } from './components/VerificationPortal';
 import { ArchitectureDiagram } from './components/ArchitectureDiagram';
 import { StaffLogin } from './components/StaffLogin';
@@ -75,7 +76,7 @@ export default function App() {
     }
 
     // Protect internal tools behind auth
-    if ((tab === 'ledger' || tab === 'generate' || tab === 'architecture') && !isAuthenticated) {
+    if ((tab === 'ledger' || tab === 'generate' || tab === 'bulk' || tab === 'architecture') && !isAuthenticated) {
       setIsPublicVerificationMode(false);
       setActiveTab('login');
       return;
@@ -178,6 +179,7 @@ export default function App() {
                 onOpenPdf={handleOpenPdf}
                 onOpenQr={handleOpenQr}
                 onCreateNew={() => navigateToTab('generate')}
+                onOpenBulk={() => navigateToTab('bulk')}
               />
             )}
 
@@ -186,6 +188,14 @@ export default function App() {
                 onCertificateCreated={(newId) => {
                   handleOpenVerification(newId);
                 }}
+                onPreviewPDF={handleOpenPdf}
+              />
+            )}
+
+            {activeTab === 'bulk' && (
+              <BulkCertificateGenerator
+                onSuccessViewLedger={() => navigateToTab('ledger')}
+                onSelectCertificate={handleOpenVerification}
                 onPreviewPDF={handleOpenPdf}
               />
             )}

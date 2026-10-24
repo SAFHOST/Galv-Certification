@@ -14,6 +14,7 @@ import {
   Calendar,
   Layers,
   CheckCircle2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { CertificateData } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
@@ -23,6 +24,7 @@ interface CertificateLedgerProps {
   onOpenPdf: (cert: CertificateData) => void;
   onOpenQr: (cert: CertificateData) => void;
   onCreateNew: () => void;
+  onOpenBulk?: () => void;
 }
 
 export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
@@ -30,6 +32,7 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
   onOpenPdf,
   onOpenQr,
   onCreateNew,
+  onOpenBulk,
 }) => {
   const [certificates, setCertificates] = useState<CertificateData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -188,12 +191,23 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
             <RefreshCw className="w-4 h-4" />
           </button>
 
+          {onOpenBulk && (
+            <button
+              onClick={onOpenBulk}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+              title="Bulk create certificates from Excel sheet and download as ZIP"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Bulk Excel (50+ Sites)</span>
+            </button>
+          )}
+
           <button
             onClick={onCreateNew}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            Issue Certificate
+            Issue Single
           </button>
         </div>
       </div>

@@ -18,18 +18,22 @@ export interface PDFGenerationResult {
  */
 export function buildVerificationUrl(certId: string, customDomain?: string): string {
   const cleanId = encodeURIComponent(certId.trim());
-  if (customDomain) {
-    const base = customDomain.replace(/\/+$/, '');
-    return `${base}/verify/${cleanId}`;
-  }
-  if (typeof process !== 'undefined' && process.env?.APP_URL) {
-    const base = process.env.APP_URL.replace(/\/+$/, '');
+  if (customDomain && customDomain.trim()) {
+    const base = customDomain.trim().replace(/\/+$/, '');
     return `${base}/verify/${cleanId}`;
   }
   if (typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}/verify/${cleanId}`;
   }
-  return `https://ais-pre-h3zgmrpej4hmbpbkzeu6fg-172359323121.europe-west2.run.app/verify/${cleanId}`;
+  if (typeof process !== 'undefined' && process.env?.APP_URL) {
+    const base = process.env.APP_URL.replace(/\/+$/, '');
+    return `${base}/verify/${cleanId}`;
+  }
+  const vercelHost = typeof process !== 'undefined' ? (process.env?.VERCEL_PROJECT_PRODUCTION_URL || process.env?.VERCEL_URL) : undefined;
+  if (vercelHost) {
+    return `https://${vercelHost.replace(/\/+$/, '')}/verify/${cleanId}`;
+  }
+  return `https://certifficationsystem.vercel.app/verify/${cleanId}`;
 }
 
 /**
@@ -77,9 +81,10 @@ export async function generateCertificatePDF(
   certData: CertificateData,
   options?: { hostDomain?: string }
 ): Promise<PDFGenerationResult> {
-  // 1. Ensure target verification endpoint exists before rendering
-  const verificationUrl =
-    certData.verification_url || buildVerificationUrl(certData.cert_id, options?.hostDomain);
+  // 1. Strictly bind the verification endpoint to this certificate's ID
+  const host = options?.hostDomain || (typeof window !== 'undefined' ? window.location.origin : undefined);
+  const verificationUrl = buildVerificationUrl(certData.cert_id, host);
+  certData.verification_url = verificationUrl;
 
   // 2. Generate canonical payload and SHA-256 hash
   const canonicalPayload = getCanonicalCertificatePayload(certData);
@@ -183,12 +188,12 @@ export async function generateCertificatePDF(
   });
 
   // 4. Dynamic Line Items Table
-  // Clear the existing template table area
+  // Clear the existing template table area completely
   page.drawRectangle({
-    x: 70,
-    y: 350,
-    width: 490,
-    height: 75,
+    x: 68,
+    y: 315,
+    width: 494,
+    height: 112,
     color: rgb(1, 1, 1),
   });
 
@@ -309,12 +314,12 @@ export async function generateCertificatePDF(
 
   // 5. Ensure Stamp & Signature are crisp
   // Positioned exactly where they are in the attached template
-  // Cover old QR code area (x: 460, y: 130, w: 88, h: 88)
+  // Cover old QR code area cleanly
   page.drawRectangle({
-    x: 460,
-    y: 130,
-    width: 88,
-    height: 88,
+    x: 450,
+    y: 125,
+    width: 105,
+    height: 105,
     color: rgb(1, 1, 1),
   });
 

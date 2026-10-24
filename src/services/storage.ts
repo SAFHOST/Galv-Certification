@@ -237,6 +237,26 @@ class CertificateRepository {
 
   async getAll(): Promise<CertificateData[]> {
     await this.initialize();
+
+    // In browser, attempt to sync latest from server in background
+    if (typeof window !== 'undefined') {
+      try {
+        const resp = await fetch('/api/certificates');
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json.success && Array.isArray(json.data)) {
+            for (const item of json.data) {
+              if (item && item.cert_id && !this.cache.has(item.cert_id)) {
+                this.cache.set(item.cert_id, item);
+              }
+            }
+          }
+        }
+      } catch {
+        // Fall back gracefully to cache
+      }
+    }
+
     return Array.from(this.cache.values()).sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
@@ -245,31 +265,50 @@ class CertificateRepository {
   async getById(certId: string): Promise<CertificateData | undefined> {
     await this.initialize();
     const cleanId = certId.trim();
-    // Case-insensitive lookup
+
+    // 1. Case-insensitive lookup in local cache
     for (const [key, cert] of this.cache.entries()) {
       if (key.toLowerCase() === cleanId.toLowerCase()) {
         return cert;
       }
     }
+
+    // 2. If not found in browser cache, query server API
+    if (typeof window !== 'undefined') {
+      try {
+        const resp = await fetch(`/api/certificates/${encodeURIComponent(cleanId)}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json.success && json.data) {
+            const cert = json.data as CertificateData;
+            this.cache.set(cert.cert_id, cert);
+            this.persist();
+            return cert;
+          }
+        }
+      } catch {
+        // Server unreachable
+      }
+    }
+
     return undefined;
   }
 
   async save(cert: CertificateData, pdfBytes?: Uint8Array): Promise<StorageResult> {
     await this.initialize();
 
+    // Always ensure verification_url matches the actual cert_id and current origin
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      cert.verification_url = `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`;
+    } else {
+      const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+      const base = process.env.APP_URL || (vercelHost ? `https://${vercelHost}` : 'https://certifficationsystem.vercel.app');
+      cert.verification_url = `${base.replace(/\/+$/, '')}/verify/${encodeURIComponent(cert.cert_id)}`;
+    }
+
     // Calculate canonical hash
     const canonical = getCanonicalCertificatePayload(cert);
     cert.sha256_hash = await generateSHA256Hash(canonical);
-
-    if (!cert.verification_url) {
-      if (typeof window !== 'undefined' && window.location?.origin) {
-        cert.verification_url = `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`;
-      } else {
-        const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-        const base = process.env.APP_URL || (vercelHost ? `https://${vercelHost}` : 'https://certifficationsystem.vercel.app');
-        cert.verification_url = `${base.replace(/\/+$/, '')}/verify/${encodeURIComponent(cert.cert_id)}`;
-      }
-    }
 
     // Google Drive / Cloud Storage deterministic path & naming
     const sanitizedId = cert.cert_id.replace(/[^a-zA-Z0-9-_]/g, '_');
@@ -289,6 +328,19 @@ class CertificateRepository {
 
     this.persist();
 
+    // Async sync to server API
+    if (typeof window !== 'undefined') {
+      try {
+        fetch('/api/certificates/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cert),
+        }).catch(() => {});
+      } catch {
+        // Offline / fallback
+      }
+    }
+
     return {
       provider: 'google_drive',
       cert_id: cert.cert_id,
@@ -299,6 +351,43 @@ class CertificateRepository {
       public_view_link: cert.storage_url,
       stored_at: new Date().toISOString(),
     };
+  }
+
+  async saveBulk(certs: CertificateData[], pdfMap?: Map<string, Uint8Array>): Promise<number> {
+    await this.initialize();
+    for (const cert of certs) {
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        cert.verification_url = `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`;
+      }
+      const canonical = getCanonicalCertificatePayload(cert);
+      cert.sha256_hash = await generateSHA256Hash(canonical);
+
+      const sanitizedId = cert.cert_id.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const driveDocId = `1mymf_${sanitizedId.toLowerCase()}_prod_doc`;
+      cert.storage_url = `https://drive.google.com/file/d/${driveDocId}/view?usp=sharing`;
+
+      this.cache.set(cert.cert_id, cert);
+      if (pdfMap && pdfMap.has(cert.cert_id)) {
+        this.pdfCache.set(cert.cert_id, pdfMap.get(cert.cert_id)!);
+      }
+    }
+
+    this.persist();
+
+    // Sync all in bulk to server
+    if (typeof window !== 'undefined') {
+      try {
+        await fetch('/api/certificates/bulk-save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(certs),
+        });
+      } catch {
+        // Local persistence still succeeded
+      }
+    }
+
+    return certs.length;
   }
 
   async getPDF(certId: string): Promise<Uint8Array> {
@@ -313,7 +402,7 @@ class CertificateRepository {
       return this.pdfCache.get(cert.cert_id)!;
     }
 
-    // Generate fresh on-demand
+    // Generate fresh on-demand strictly for this certificate
     const gen = await generateCertificatePDF(cert);
     this.pdfCache.set(cert.cert_id, gen.pdfBytes);
     return gen.pdfBytes;
@@ -321,7 +410,26 @@ class CertificateRepository {
 
   async verify(certId: string): Promise<VerificationResult> {
     await this.initialize();
-    const cert = await this.getById(certId);
+    let cert = await this.getById(certId);
+
+    // If not found in local cache, try querying the verification API (e.g. mobile phone scanner)
+    if (!cert && typeof window !== 'undefined') {
+      try {
+        const resp = await fetch(`/api/verify/${encodeURIComponent(certId.trim())}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json.success && json.verification) {
+            if (json.verification.certificate) {
+              this.cache.set(json.verification.certificate.cert_id, json.verification.certificate);
+              this.persist();
+            }
+            return json.verification;
+          }
+        }
+      } catch {
+        // Fall back to local check
+      }
+    }
 
     if (!cert) {
       return {

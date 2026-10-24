@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Download, ExternalLink, Printer, ShieldCheck } from 'lucide-react';
 import type { CertificateData } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
+import { generateCertificatePDF } from '../services/pdfEngine';
 
 interface PDFPreviewModalProps {
   certificate: CertificateData | null;
@@ -29,7 +30,14 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ certificate, i
 
     const loadPdf = async () => {
       try {
-        const bytes = await certificateRepository.getPDF(certificate.cert_id);
+        let bytes: Uint8Array;
+        try {
+          bytes = await certificateRepository.getPDF(certificate.cert_id);
+        } catch {
+          const gen = await generateCertificatePDF(certificate);
+          bytes = gen.pdfBytes;
+        }
+
         const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         if (isMounted) {
