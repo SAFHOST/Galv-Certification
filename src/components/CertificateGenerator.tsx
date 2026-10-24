@@ -21,7 +21,7 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({
   });
 
   const [issueDate, setIssueDate] = useState<string>('24 OCT 2026');
-  const [client, setClient] = useState<string>('Materials of M/S GBH');
+  const [client, setClient] = useState<string>('GBH');
   const [projectName, setProjectName] = useState<string>('STC Telecom Site Extension Project - Northern Cluster');
   const [poNumber, setPoNumber] = useState<string>('PO-2026-GBH-8821');
   const [deliveryNote, setDeliveryNote] = useState<string>('DN-25-8821');

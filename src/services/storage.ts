@@ -63,7 +63,7 @@ const INITIAL_SEEDS: CertificateData[] = [
   {
     cert_id: 'MYF-QC-25-116',
     issue_date: '30 SEP 2026',
-    client: 'Materials of M/S GBH',
+    client: 'GBH',
     project_name: 'STC Telecom Site Extension Project - Northern Cluster',
     purchase_order_no: 'PO-GBH-2026-991',
     delivery_note_no: 'DN-25-1160',

@@ -86,12 +86,24 @@ export async function generateCertificatePDF(
   const qrDataUrl = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'H', margin: 0, width: 280 });
   
   // Read template
-  const logoBase64 = "data:image/png;base64," + fs.readFileSync(TEMPLATE_ASSETS.logoPath).toString("base64");
-  const signatureBase64 = "data:image/jpeg;base64," + fs.readFileSync(TEMPLATE_ASSETS.signaturePath).toString("base64");
-  const stampBase64 = "data:image/jpeg;base64," + fs.readFileSync(TEMPLATE_ASSETS.stampPath).toString("base64");
-  let html = fs.readFileSync(path.resolve(__dirname, '../templates/certificate.html'), 'utf8');
+  const logoPath = TEMPLATE_ASSETS.logoPath;
+  const signaturePath = TEMPLATE_ASSETS.signaturePath;
+  const stampPath = TEMPLATE_ASSETS.stampPath;
+  const templatePath = path.resolve(__dirname, '../templates/certificate.html');
+
+  if (!fs.existsSync(logoPath)) throw new Error(`Logo file not found at ${logoPath}`);
+  if (!fs.existsSync(signaturePath)) throw new Error(`Signature file not found at ${signaturePath}`);
+  if (!fs.existsSync(stampPath)) throw new Error(`Stamp file not found at ${stampPath}`);
+  if (!fs.existsSync(templatePath)) throw new Error(`Template file not found at ${templatePath}`);
+
+  const logoBase64 = "data:image/png;base64," + fs.readFileSync(logoPath).toString("base64");
+  const signatureBase64 = "data:image/jpeg;base64," + fs.readFileSync(signaturePath).toString("base64");
+  const stampBase64 = "data:image/jpeg;base64," + fs.readFileSync(stampPath).toString("base64");
+  let html = fs.readFileSync(templatePath, 'utf8');
 
   // Fill template
+  const cleanClient = certData.client.replace(/^Materials of M\/S\s+/i, '').replace(/^M\/S\s+/i, '');
+  
   html = html
     .replace('{{LOGO_DATA}}', logoBase64)
     .replace('{{SIGNATURE_DATA}}', signatureBase64)
@@ -99,9 +111,9 @@ export async function generateCertificatePDF(
     .replace('{{QR_DATA}}', qrDataUrl)
     .replace('{{CERT_REF}}', certData.cert_id)
     .replace('{{CERT_DATE}}', certData.issue_date)
-    .replace('{{CLIENT_NAME}}', certData.client);
+    .replace('{{CLIENT_NAME}}', cleanClient);
 
-  const tableRows = certData.line_items?.map(item => `
+  const tableRows = (certData.line_items || []).map(item => `
     <tr>
         <td class="col-item">${item.item_no}</td>
         <td class="col-site">${item.site_id}</td>
@@ -109,9 +121,9 @@ export async function generateCertificatePDF(
         <td class="col-qty">${item.quantity}</td>
         <td class="col-unit">${item.unit}</td>
     </tr>
-  `).join('') || '';
+  `).join('') || '<tr><td colspan="5" style="text-align:center">No items listed</td></tr>';
   
-  html = html.replace('{{TABLE_ROWS}}', tableRows);
+  html = html.replace('{{TABLE_ROWS}}', html.includes('{{TABLE_ROWS}}') ? tableRows : '');
 
   let page;
   try {
@@ -119,13 +131,13 @@ export async function generateCertificatePDF(
     page = await browser.newPage();
     
     // Set a timeout for the entire operation
-    await page.setDefaultTimeout(30000);
+    await page.setDefaultTimeout(45000); // Increased timeout
     
-    await page.setContent(html, { waitUntil: 'load' });
+    await page.setContent(html, { waitUntil: 'networkidle0' }); // Use networkidle0 for fonts
     const pdfBuffer = await page.pdf({ 
       format: 'A4', 
       printBackground: true,
-      margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' }
+      margin: { top: '0.4in', right: '0.4in', bottom: '0.4in', left: '0.4in' }
     });
     
     return { 
@@ -136,11 +148,15 @@ export async function generateCertificatePDF(
       fileName: `${certData.line_items?.[0]?.site_id || 'Unknown'}_${certData.client.replace(/[^a-zA-Z0-9-_]/g, '_')}_${certData.cert_id}.pdf` 
     };
   } catch (err: any) {
-    console.error(`[PDF Engine] Error generating PDF for ${certData.cert_id}:`, err);
+    console.error(`[PDF Engine] CRITICAL FAILURE for ${certData.cert_id}:`, err);
     throw new Error(`PDF generation failed: ${err.message}`);
   } finally {
     if (page) {
-      await page.close().catch(e => console.error('[PDF Engine] Error closing page:', e));
+      try {
+        await page.close();
+      } catch (e) {
+        console.error('[PDF Engine] Error closing page (swallowed):', e);
+      }
     }
   }
 }

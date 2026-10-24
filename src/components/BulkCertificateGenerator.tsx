@@ -21,7 +21,7 @@ interface ParsedSiteRow {
 }
 
 export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> = ({ onSuccessViewLedger, onSelectCertificate, onPreviewPDF }) => {
-  const [client, setClient] = useState('Materials of M/S GBH');
+  const [client, setClient] = useState('GBH');
   const [projectName, setProjectName] = useState('STC Telecom Site Extension Project');
   const [issueDate, setIssueDate] = useState('24 OCT 2026');
   const [poNumber, setPoNumber] = useState('PO-2026-GBH-8821');
@@ -63,23 +63,27 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
 
       // Group data by siteId
       const groupedData = parsedData.reduce((acc, row) => {
-        if (!acc[row.siteId]) {
-          acc[row.siteId] = [];
+        const normalizedSiteId = row.siteId.toUpperCase().trim();
+        if (!normalizedSiteId) return acc;
+        if (!acc[normalizedSiteId]) {
+          acc[normalizedSiteId] = [];
         }
-        acc[row.siteId].push(row);
+        acc[normalizedSiteId].push(row);
         return acc;
       }, {} as Record<string, ParsedSiteRow[]>);
 
       const siteIds = Object.keys(groupedData);
+      const yearShort = new Date().getFullYear().toString().slice(-2);
+      const startNum = Math.floor(100 + Math.random() * 800);
 
       for (let i = 0; i < siteIds.length; i++) {
         const siteId = siteIds[i];
         const rows = groupedData[siteId];
-        const certId = `MYF-QC-26-${254 + i}`;
+        const certId = `MYF-QC-${yearShort}-${startNum + i}`;
         
         const lineItems: LineItem[] = rows.map((row, index) => ({
           item_no: index + 1,
-          site_id: row.siteId,
+          site_id: siteId,
           description: row.description,
           quantity: row.quantity,
           unit: row.unit,
@@ -200,8 +204,10 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
             <tbody>
               {(() => {
                 const groups = parsedData.reduce((acc, row) => {
-                  if (!acc[row.siteId]) acc[row.siteId] = [];
-                  acc[row.siteId].push(row);
+                  const normalizedSiteId = row.siteId.toUpperCase().trim();
+                  if (!normalizedSiteId) return acc;
+                  if (!acc[normalizedSiteId]) acc[normalizedSiteId] = [];
+                  acc[normalizedSiteId].push(row);
                   return acc;
                 }, {} as Record<string, ParsedSiteRow[]>);
                 
@@ -214,7 +220,7 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
                     </tr>
                     {rows.map((row, j) => (
                       <tr key={`${siteId}-${j}`}>
-                        <td className="p-2 border pl-4 text-slate-500">{row.siteId}</td>
+                        <td className="p-2 border pl-4 text-slate-500">{siteId}</td>
                         <td className="p-2 border">{row.description}</td>
                         <td className="p-2 border text-center">{row.quantity} {row.unit}</td>
                       </tr>
