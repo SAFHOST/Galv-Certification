@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
         
         * { box-sizing: border-box; }
         body { 
-            font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: 'Amiri', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             font-size: 11px; 
             margin: 0; 
             padding: 20px;
@@ -31,7 +30,7 @@
             text-align: right; 
             direction: rtl; 
             unicode-bidi: embed;
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Amiri', sans-serif;
             font-size: 10px;
         }
         
@@ -118,7 +117,7 @@
         .rtl { 
             direction: rtl; 
             unicode-bidi: embed; 
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Amiri', sans-serif;
         }
     </style>
 </head>
@@ -134,10 +133,7 @@
             <img src="{{LOGO_DATA}}" class="logo-img" alt="MYMF Logo">
         </div>
         <div class="header-col right rtl">
-            <strong>مصنع محمد يحيى العسيري</strong><br>
-            للصناعات المعدنية<br>
-            س.ت: 1010997047<br>
-            الرقم الضريبي: 302154658900006
+            <img src="{{ARABIC_HEADER_DATA}}" style="width: 220px; height: auto;" alt="Arabic Header">
         </div>
     </div>
 
@@ -185,7 +181,9 @@
 
     <div class="bottom-footer">
         <div style="margin-bottom: 3px;">Kingdom of Saudi Arabia | P.O. Box: 370372, Riyadh 11325</div>
-        <div class="rtl">المملكة العربية السعودية | ص.ب 370372، الرياض 11325</div>
+        <div class="rtl">
+            <img src="{{ARABIC_FOOTER_DATA}}" style="width: 300px; height: auto;" alt="Arabic Footer">
+        </div>
     </div>
 </body>
 </html>

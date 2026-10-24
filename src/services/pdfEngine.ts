@@ -98,21 +98,28 @@ export async function generateCertificatePDF(
   const sha256Hash = certData.sha256_hash || (await generateSHA256Hash(canonicalPayload));
   const qrDataUrl = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'H', margin: 0, width: 280 });
   
-  // Read template
+  // Read template and assets
   const logoPath = TEMPLATE_ASSETS.logoPath;
   const signaturePath = TEMPLATE_ASSETS.signaturePath;
   const stampPath = TEMPLATE_ASSETS.stampPath;
   const templatePath = path.resolve(__dirname, '../templates/certificate.html');
+  const fontPath = path.resolve(__dirname, '../../public/assets/template/Cairo.ttf');
 
   if (!fs.existsSync(logoPath)) throw new Error(`Logo file not found at ${logoPath}`);
   if (!fs.existsSync(signaturePath)) throw new Error(`Signature file not found at ${signaturePath}`);
   if (!fs.existsSync(stampPath)) throw new Error(`Stamp file not found at ${stampPath}`);
   if (!fs.existsSync(templatePath)) throw new Error(`Template file not found at ${templatePath}`);
-
+  
   const logoBase64 = "data:image/png;base64," + fs.readFileSync(logoPath).toString("base64");
   const signatureBase64 = "data:image/jpeg;base64," + fs.readFileSync(signaturePath).toString("base64");
   const stampBase64 = "data:image/jpeg;base64," + fs.readFileSync(stampPath).toString("base64");
   let html = fs.readFileSync(templatePath, 'utf8');
+
+  // Embed Cairo font if exists for offline Arabic support
+  let fontBase64 = '';
+  if (fs.existsSync(fontPath)) {
+    fontBase64 = fs.readFileSync(fontPath).toString('base64');
+  }
 
   // Fill template - Improved cleaning of client name to prevent duplication
   const cleanClient = certData.client
@@ -121,14 +128,40 @@ export async function generateCertificatePDF(
     .replace(/^M\/S\s+/i, '')
     .trim();
   
+  const arabicAssetsPath = path.resolve(__dirname, '../../arabic_assets.json');
+  let arabicAssets = { header: '', footer: '' };
+  if (fs.existsSync(arabicAssetsPath)) {
+    arabicAssets = JSON.parse(fs.readFileSync(arabicAssetsPath, 'utf8'));
+  }
+
   html = html
     .replace('{{LOGO_DATA}}', logoBase64)
     .replace('{{SIGNATURE_DATA}}', signatureBase64)
     .replace('{{STAMP_DATA}}', stampBase64)
+    .replace('{{ARABIC_HEADER_DATA}}', arabicAssets.header)
+    .replace('{{ARABIC_FOOTER_DATA}}', arabicAssets.footer)
     .replace('{{QR_DATA}}', qrDataUrl)
     .replace('{{CERT_REF}}', certData.cert_id)
     .replace('{{CERT_DATE}}', certData.issue_date)
     .replace('{{CLIENT_NAME}}', cleanClient);
+
+  // Inject base64 font if we have it
+  if (fontBase64) {
+    const fontStyle = `
+      <style>
+        @font-face {
+          font-family: 'Cairo';
+          src: url(data:font/ttf;base64,${fontBase64}) format('truetype');
+          font-weight: normal;
+          font-style: normal;
+        }
+        .rtl, .header-col.right, .bottom-footer .rtl {
+          font-family: 'Cairo', sans-serif !important;
+        }
+      </style>
+    `;
+    html = html.replace('</head>', `${fontStyle}</head>`);
+  }
 
   const tableRows = (certData.line_items || []).map(item => `
     <tr>

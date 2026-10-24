@@ -166,8 +166,8 @@ export async function uploadCertificateToDrive(
               },
               {
                 step: '04',
-                title: 'Executive PDF Layout Compilation (pdf-lib)',
-                desc: 'Render official BS EN ISO 1461 document layout. Inject dynamic QR code into top-right header (X: 472, Y: 724) and stamp block.',
+                title: 'Executive PDF Layout Compilation (Puppeteer)',
+                desc: 'Render official BS EN ISO 1461 document layout via headless Chrome. Inject dynamic QR code and static Arabic high-res image blocks into header and footer.',
                 icon: <Code2 className="w-5 h-5 text-slate-700" />,
                 badge: 'A4 Vector + Raster',
               },
