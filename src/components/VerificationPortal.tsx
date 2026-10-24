@@ -157,23 +157,47 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
         </div>
       )}
 
-      {/* Simplified Verification Result */}
-      <div className={`rounded-2xl border p-6 text-center space-y-4 shadow-md ${
+      {/* Verification Status & Details */}
+      <div className={`rounded-2xl border p-6 space-y-6 shadow-md ${
         isAuthentic ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
       }`}>
-        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
-          isAuthentic ? 'bg-emerald-500' : 'bg-rose-500'
-        }`}>
-          <CheckCircle2 className="w-8 h-8 text-white" />
-        </div>
-        
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">
+        <div className="text-center space-y-2">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
+            isAuthentic ? 'bg-emerald-500' : 'bg-rose-500'
+            }`}>
+            <CheckCircle2 className="w-8 h-8 text-white" />
+            </div>
+            
+            <h2 className="text-xl font-bold text-slate-900">
             {isAuthentic ? 'Verified Authentic' : 'Verification Failed'}
-          </h2>
-          <p className="text-xs text-slate-600 mt-1">
-            Certificate ID: <span className="font-mono font-semibold">{cert.cert_id}</span>
-          </p>
+            </h2>
+        </div>
+
+        <div className="bg-white rounded-xl p-4 border border-slate-100 space-y-3 text-sm">
+            <div className="flex justify-between">
+                <span className="text-slate-500">Certificate Number:</span>
+                <span className="font-mono font-semibold">{cert.cert_id}</span>
+            </div>
+            <div className="flex justify-between">
+                <span className="text-slate-500">Client:</span>
+                <span className="font-semibold text-right">{cert.client}</span>
+            </div>
+            {cert.line_items?.[0] && (
+                <>
+                    <div className="flex justify-between">
+                        <span className="text-slate-500">Site ID:</span>
+                        <span className="font-mono font-semibold">{cert.line_items[0].site_id}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <span className="text-slate-500">Article Details:</span>
+                        <span className="font-semibold">{cert.line_items[0].description}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-slate-500">Quantity:</span>
+                        <span className="font-semibold">{cert.line_items[0].quantity} {cert.line_items[0].unit}</span>
+                    </div>
+                </>
+            )}
         </div>
 
         <button
@@ -181,11 +205,11 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
           className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
         >
           <Download className="w-4 h-4" />
-          Download Certificate
+          Download Full Certificate
         </button>
       </div>
 
-      {/* Inspector Audit & Demonstration Controls (Visible Only to Authenticated Staff) */}
+      {/* Inspector Audit Controls (Visible Only to Authenticated Staff) */}
       {isAuthenticated && (
         <div className="bg-slate-100 rounded-xl border border-slate-200 p-4">
           <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
