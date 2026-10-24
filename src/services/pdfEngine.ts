@@ -62,9 +62,15 @@ export async function generateCertificatePDF(
   // 3. Helper to draw images from base64
   const drawBase64Image = async (base64: string, x: number, y: number, w: number, h: number) => {
     try {
-      const imgBytes = Uint8Array.from(atob(base64.split(',')[1] || base64), c => c.charCodeAt(0));
+      const pureBase64 = base64.split(',')[1] || base64;
+      const imgBytes = Uint8Array.from(atob(pureBase64), c => c.charCodeAt(0));
+      
       let img: PDFImage;
-      if (base64.includes('image/png')) {
+      // Detect format by magic numbers
+      // PNG: 89 50 4E 47
+      const isPng = imgBytes[0] === 0x89 && imgBytes[1] === 0x50 && imgBytes[2] === 0x4e && imgBytes[3] === 0x47;
+      
+      if (isPng) {
         img = await pdfDoc.embedPng(imgBytes);
       } else {
         img = await pdfDoc.embedJpg(imgBytes);
