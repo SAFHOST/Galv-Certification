@@ -66,14 +66,14 @@ export function buildVerificationUrl(cert: CertificateData | string, customDomai
 }
 
 /**
- * Renders crisp, connected Arabic header using canvas when available
+ * Renders Arabic text using canvas and converts to PNG for PDF embedding.
  */
-function renderArabicHeaderPng(): Uint8Array | null {
+function renderArabicTextToPng(lines: { text: string; fontSize: number; isBold?: boolean }[], width: number, height: number): Uint8Array | null {
   if (typeof document === 'undefined') return null;
   try {
     const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 190;
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
@@ -84,17 +84,12 @@ function renderArabicHeaderPng(): Uint8Array | null {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#000000';
 
-    // Line 1: مصنع محمد يحيى العسيري
-    ctx.font = 'bold 36px "Segoe UI", Arial, Tahoma, sans-serif';
-    ctx.fillText('مصنع محمد يحيى العسيري', 620, 50);
-
-    // Line 2: للصناعات المعدنية  س.ت : 1010207045
-    ctx.font = '26px "Segoe UI", Arial, Tahoma, sans-serif';
-    ctx.fillText('للصناعات المعدنية  س.ت. : 1010207045', 620, 106);
-
-    // Line 3: الرقم الضريبي : 302154658900006
-    ctx.font = '24px "Segoe UI", Arial, Tahoma, sans-serif';
-    ctx.fillText('الرقم الضريبي : 302154658900006', 620, 158);
+    let currentY = 30;
+    lines.forEach(line => {
+        ctx.font = `${line.isBold ? 'bold ' : ''}${line.fontSize}px "Segoe UI", Arial, Tahoma, sans-serif`;
+        ctx.fillText(line.text, width - 5, currentY);
+        currentY += line.fontSize + 10;
+    });
 
     const dataUrl = canvas.toDataURL('image/png');
     return dataUrlToUint8Array(dataUrl);
@@ -198,11 +193,17 @@ export async function generateCertificatePDF(
   page.drawText('CR No: 1010997047', { x: 50, y: height - 64, size: 8, font: fontRegular });
   page.drawText('VAT No: 302154658900006', { x: 50, y: height - 76, size: 8, font: fontRegular });
   
-  // Arabic Header (Placeholder - needs proper font support for full Arabic)
-  page.drawText('مصنع محمد يحيى العسيري', { x: 440, y: height - 40, size: 9, font: fontRegular });
-  page.drawText('للصناعات المعدنية', { x: 470, y: height - 52, size: 8, font: fontRegular });
-  page.drawText('س.ت: 1010997047', { x: 480, y: height - 64, size: 8, font: fontRegular });
-  page.drawText('الرقم الضريبي: 302154658900006', { x: 430, y: height - 76, size: 8, font: fontRegular });
+  // Arabic Header
+  const headerArabicPng = renderArabicTextToPng([
+    { text: 'مصنع محمد يحيى العسيري', fontSize: 16, isBold: true },
+    { text: 'للصناعات المعدنية', fontSize: 12 },
+    { text: 'س.ت: 1010997047', fontSize: 10 },
+    { text: 'الرقم الضريبي: 302154658900006', fontSize: 10 },
+  ], 250, 100);
+  if (headerArabicPng) {
+    const arabicHeaderImg = await pdfDoc.embedPng(headerArabicPng);
+    page.drawImage(arabicHeaderImg, { x: 320, y: height - 90, width: 250, height: 80 });
+  }
   
   // Title
   page.drawText('HOT DIP GALVANIZATION CERTIFICATE', { x: width / 2 - 130, y: height - 130, size: 14, font: fontBold });
@@ -264,8 +265,14 @@ export async function generateCertificatePDF(
   page.drawText('Kingdom of Saudi Arabia', { x: 50, y: 50, size: 8, font: fontRegular });
   page.drawText('P.O. Box: 370372, Riyadh 11325', { x: 50, y: 40, size: 8, font: fontRegular });
   
-  page.drawText('المملكة العربية السعودية', { x: 440, y: 50, size: 8, font: fontRegular });
-  page.drawText('ص.ب: 370372، الرياض 11325', { x: 440, y: 40, size: 8, font: fontRegular });
+  const footerArabicPng = renderArabicTextToPng([
+    { text: 'المملكة العربية السعودية', fontSize: 10 },
+    { text: 'ص.ب: 370372، الرياض 11325', fontSize: 10 },
+  ], 250, 60);
+  if (footerArabicPng) {
+    const arabicFooterImg = await pdfDoc.embedPng(footerArabicPng);
+    page.drawImage(arabicFooterImg, { x: 320, y: 20, width: 250, height: 50 });
+  }
 
 
 
