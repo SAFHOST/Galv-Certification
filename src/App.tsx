@@ -17,10 +17,10 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => authService.isAuthenticated());
 
-  // Navigation & View state
-  const [activeTab, setActiveTab] = useState<ActiveTab>('verify');
-  const [selectedCertId, setSelectedCertId] = useState<string>('MYF-QC-25-116');
-  const [isPublicVerificationMode, setIsPublicVerificationMode] = useState<boolean>(true);
+  // Navigation & View state - Default to Login UI on landing
+  const [activeTab, setActiveTab] = useState<ActiveTab>('login');
+  const [selectedCertId, setSelectedCertId] = useState<string>('MYF-QC-26-239');
+  const [isPublicVerificationMode, setIsPublicVerificationMode] = useState<boolean>(false);
 
   // Modals state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -39,7 +39,7 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  // Check URL pathname for direct verification routing (e.g. /verify/MYF-QC-25-116)
+  // Check URL pathname for direct verification routing (e.g. /verify/MYF-QC-26-239)
   useEffect(() => {
     const handleUrlRoute = () => {
       const path = window.location.pathname;
@@ -52,13 +52,13 @@ export default function App() {
           setIsPublicVerificationMode(true);
         }
       } else {
-        // If visiting root URL: if authenticated, go to ledger, otherwise stay on public verification
+        // If visiting root URL: if authenticated, go to ledger, otherwise land on Login UI
         if (authService.isAuthenticated()) {
           setIsPublicVerificationMode(false);
           setActiveTab('ledger');
         } else {
-          setIsPublicVerificationMode(true);
-          setActiveTab('verify');
+          setIsPublicVerificationMode(false);
+          setActiveTab('login');
         }
       }
     };
@@ -75,6 +75,12 @@ export default function App() {
       return;
     }
 
+    if (tab === 'verify') {
+      setIsPublicVerificationMode(true);
+      setActiveTab('verify');
+      return;
+    }
+
     // Protect internal tools behind auth
     if ((tab === 'ledger' || tab === 'generate' || tab === 'bulk' || tab === 'architecture') && !isAuthenticated) {
       setIsPublicVerificationMode(false);
@@ -84,7 +90,7 @@ export default function App() {
 
     setIsPublicVerificationMode(false);
     setActiveTab(tab);
-    if (tab !== 'verify' && window.location.pathname.startsWith('/verify/')) {
+    if (window.location.pathname.startsWith('/verify/')) {
       window.history.pushState({}, '', '/');
     }
   };
@@ -123,9 +129,9 @@ export default function App() {
 
   const handleLogout = () => {
     authService.logout();
-    setIsPublicVerificationMode(true);
-    setActiveTab('verify');
-    window.history.pushState({}, '', `/verify/${encodeURIComponent(selectedCertId)}`);
+    setIsPublicVerificationMode(false);
+    setActiveTab('login');
+    window.history.pushState({}, '', '/');
   };
 
   return (
@@ -163,9 +169,10 @@ export default function App() {
         {activeTab === 'login' && !isAuthenticated && (
           <StaffLogin
             onSuccess={handleLoginSuccess}
+            onNavigateToVerify={handleOpenVerification}
+            onOpenScanner={() => setIsScannerOpen(true)}
             onCancel={() => {
-              setIsPublicVerificationMode(true);
-              setActiveTab('verify');
+              handleOpenVerification(selectedCertId || 'MYF-QC-26-239');
             }}
           />
         )}

@@ -261,7 +261,7 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
           <div className="text-xs space-y-0.5 text-slate-800">
             <div className="font-bold text-sm text-slate-900">Mohammed Yehya Al-Aseery</div>
             <div className="text-slate-600">For Metal Industries</div>
-            <div className="text-slate-600 font-mono text-[11px]">CR NO: 1010997047</div>
+            <div className="text-slate-600 font-mono text-[11px]">CR NO: 1010207045</div>
             <div className="text-slate-600 font-mono text-[11px] pt-1">VAT NO: 302154658900006</div>
             <div className="font-mono font-bold text-slate-900 text-xs pt-1">
               Cert. Ref. No.: {cert.cert_id}.
@@ -278,10 +278,9 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
           </div>
 
           {/* Right: Arabic Company Meta */}
-          <div className="text-xs text-right space-y-0.5 text-slate-800 font-arabic self-end sm:self-center">
+          <div className="text-xs text-right space-y-0.5 text-slate-800 font-arabic self-end sm:self-center" dir="rtl">
             <div className="font-bold text-sm text-slate-900">مصنع محمد يحيى العسيري</div>
-            <div className="text-slate-600">للصناعات المعدنية س .ت :.</div>
-            <div className="text-slate-600 font-mono text-[11px]">1010207045</div>
+            <div className="text-slate-600">للصناعات المعدنية  س.ت. : 1010207045</div>
             <div className="text-slate-600 font-mono text-[11px] pt-1">الرقم الضريبي : 302154658900006</div>
           </div>
         </div>

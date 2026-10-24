@@ -36,6 +36,8 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
 }) => {
   const [certificates, setCertificates] = useState<CertificateData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterSiteId, setFilterSiteId] = useState<string>('ALL');
+  const [filterClient, setFilterClient] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AUTHENTIC' | 'REVOKED'>('ALL');
   const [loading, setLoading] = useState(true);
 
@@ -55,17 +57,50 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
     loadData();
   }, []);
 
+  // Compute unique client / beneficiary list and site ID list for fast dropdowns
+  const availableClients = Array.from(
+    new Set(certificates.map((c) => c.client.trim()).filter(Boolean))
+  ).sort();
+
+  const availableSites = Array.from(
+    new Set(
+      certificates.flatMap((c) => c.line_items?.map((item) => item.site_id.trim()) || []).filter(Boolean)
+    )
+  ).sort();
+
   const filtered = certificates.filter((cert) => {
-    const matchesSearch =
-      cert.cert_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cert.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cert.line_items?.some((item) =>
-        item.site_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchTerm.toLowerCase())
+    // 1. General search
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        cert.cert_id.toLowerCase().includes(q) ||
+        cert.client.toLowerCase().includes(q) ||
+        cert.project_name?.toLowerCase().includes(q) ||
+        cert.purchase_order_no?.toLowerCase().includes(q) ||
+        cert.line_items?.some(
+          (item) =>
+            item.site_id.toLowerCase().includes(q) ||
+            item.description.toLowerCase().includes(q) ||
+            item.heat_number?.toLowerCase().includes(q)
+        );
+      if (!matchesSearch) return false;
+    }
+
+    // 2. Filter by Site ID
+    if (filterSiteId && filterSiteId !== 'ALL') {
+      const matchesSite = cert.line_items?.some(
+        (item) => item.site_id.toLowerCase() === filterSiteId.toLowerCase()
       );
+      if (!matchesSite) return false;
+    }
 
-    if (!matchesSearch) return false;
+    // 3. Filter by Client / Beneficiary
+    if (filterClient && filterClient !== 'ALL') {
+      const matchesClient = cert.client.toLowerCase() === filterClient.toLowerCase();
+      if (!matchesClient) return false;
+    }
 
+    // 4. Status filter
     if (statusFilter === 'AUTHENTIC') {
       return cert.status === 'AUTHENTIC_VERIFIED';
     }
@@ -74,6 +109,19 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
     }
     return true;
   });
+
+  const hasActiveFilters =
+    searchTerm.trim() !== '' ||
+    filterSiteId !== 'ALL' ||
+    filterClient !== 'ALL' ||
+    statusFilter !== 'ALL';
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setFilterSiteId('ALL');
+    setFilterClient('ALL');
+    setStatusFilter('ALL');
+  };
 
   // Calculate Metrics
   const totalIssued = certificates.length;
@@ -139,76 +187,130 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
         </div>
       </div>
 
-      {/* Action & Filter Toolbar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by Certificate #, Client, Site ID, or Description..."
-            className="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900"
-          />
-        </div>
-
-        {/* Filter buttons & CTA */}
-        <div className="flex items-center gap-3">
-          {/* Status Segmented Control */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs font-semibold">
-            <button
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 rounded-md cursor-pointer transition-colors ${
-                statusFilter === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              All Records
-            </button>
-            <button
-              onClick={() => setStatusFilter('AUTHENTIC')}
-              className={`px-3 py-1.5 rounded-md cursor-pointer transition-colors ${
-                statusFilter === 'AUTHENTIC' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Authentic
-            </button>
-            <button
-              onClick={() => setStatusFilter('REVOKED')}
-              className={`px-3 py-1.5 rounded-md cursor-pointer transition-colors ${
-                statusFilter === 'REVOKED' ? 'bg-white text-rose-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Revoked
-            </button>
+      {/* Action & Filter Toolbar with Multi-attribute Filters */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
+        {/* Top Filter Controls Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* General Search */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search reference, description..."
+              className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+            />
           </div>
 
-          <button
-            onClick={loadData}
-            className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600 cursor-pointer"
-            title="Refresh records"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-
-          {onOpenBulk && (
-            <button
-              onClick={onOpenBulk}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-              title="Bulk create certificates from Excel sheet and download as ZIP"
+          {/* Filter by Site ID */}
+          <div className="relative">
+            <select
+              value={filterSiteId}
+              onChange={(e) => setFilterSiteId(e.target.value)}
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 font-medium focus:outline-hidden focus:ring-2 focus:ring-slate-900 cursor-pointer"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Bulk Excel (50+ Sites)</span>
-            </button>
-          )}
+              <option value="ALL">All Site IDs ({availableSites.length})</option>
+              {availableSites.map((site) => (
+                <option key={site} value={site}>
+                  Site: {site}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <button
-            onClick={onCreateNew}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Issue Single
-          </button>
+          {/* Filter by Client / Beneficiary */}
+          <div className="relative">
+            <select
+              value={filterClient}
+              onChange={(e) => setFilterClient(e.target.value)}
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 font-medium focus:outline-hidden focus:ring-2 focus:ring-slate-900 cursor-pointer"
+            >
+              <option value="ALL">All Clients / Beneficiaries ({availableClients.length})</option>
+              {availableClients.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter by Status & Action */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center p-0.5 bg-slate-100 rounded-lg text-xs font-semibold">
+              <button
+                onClick={() => setStatusFilter('ALL')}
+                className={`flex-1 py-1.5 rounded-md text-center cursor-pointer transition-colors ${
+                  statusFilter === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setStatusFilter('AUTHENTIC')}
+                className={`flex-1 py-1.5 rounded-md text-center cursor-pointer transition-colors ${
+                  statusFilter === 'AUTHENTIC' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Authentic
+              </button>
+              <button
+                onClick={() => setStatusFilter('REVOKED')}
+                className={`flex-1 py-1.5 rounded-md text-center cursor-pointer transition-colors ${
+                  statusFilter === 'REVOKED' ? 'bg-white text-rose-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Revoked
+              </button>
+            </div>
+
+            <button
+              onClick={loadData}
+              className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600 cursor-pointer"
+              title="Refresh records"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Action Buttons & Filter Summary Banner */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <span>
+              Showing <strong className="font-semibold text-slate-900">{filtered.length}</strong> of{' '}
+              <strong className="font-semibold text-slate-900">{totalIssued}</strong> certificates
+            </span>
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="ml-2 text-xs font-semibold text-rose-600 hover:text-rose-800 underline cursor-pointer"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onOpenBulk && (
+              <button
+                onClick={onOpenBulk}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                title="Bulk create certificates from Excel sheet and download as ZIP"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Bulk Excel (50+ Sites)</span>
+              </button>
+            )}
+
+            <button
+              onClick={onCreateNew}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Issue Single
+            </button>
+          </div>
         </div>
       </div>
 

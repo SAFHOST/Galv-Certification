@@ -5,13 +5,21 @@ import { authService, DEFAULT_CREDENTIALS } from '../services/auth';
 interface StaffLoginProps {
   onSuccess: () => void;
   onCancel?: () => void;
+  onNavigateToVerify?: (certId: string) => void;
+  onOpenScanner?: () => void;
 }
 
-export const StaffLogin: React.FC<StaffLoginProps> = ({ onSuccess, onCancel }) => {
+export const StaffLogin: React.FC<StaffLoginProps> = ({
+  onSuccess,
+  onCancel,
+  onNavigateToVerify,
+  onOpenScanner,
+}) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [filled, setFilled] = useState(false);
+  const [searchCertId, setSearchCertId] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +41,16 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({ onSuccess, onCancel }) =
     setTimeout(() => setFilled(false), 2000);
   };
 
+  const handleDirectSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = searchCertId.trim();
+    if (clean && onNavigateToVerify) {
+      onNavigateToVerify(clean);
+    }
+  };
+
   return (
-    <div className="max-w-md mx-auto px-4 py-12">
+    <div className="max-w-md mx-auto px-4 py-8 sm:py-12 space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
         {/* Header with MYMF Branding */}
         <div className="p-6 text-center border-b border-slate-100 bg-slate-50">
@@ -47,7 +63,7 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({ onSuccess, onCancel }) =
             QA/QC Internal Engineering Portal
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Restricted access for issuing and managing inspection records
+            Mohammed Yehya Al-Aseery For Metal Industries • Authorized Personnel Sign In
           </p>
         </div>
 
@@ -122,19 +138,53 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({ onSuccess, onCancel }) =
               </div>
             </div>
           </div>
-
-          {onCancel && (
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={onCancel}
-                className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
-              >
-                ← Return to Public Verification View
-              </button>
-            </div>
-          )}
         </form>
+      </div>
+
+      {/* Public Customer / Auditor Quick Verification Card */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+        <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <span>Public Customer Certificate Verification</span>
+        </div>
+        <p className="text-[11px] text-slate-500">
+          Verify genuine BS EN ISO 1461 hot-dip galvanization certificate by reference number or physical QR code:
+        </p>
+
+        <form onSubmit={handleDirectSearch} className="flex gap-2">
+          <input
+            type="text"
+            value={searchCertId}
+            onChange={(e) => setSearchCertId(e.target.value)}
+            placeholder="e.g. MYF-QC-26-239"
+            className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 font-mono"
+          />
+          <button
+            type="submit"
+            className="px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg cursor-pointer"
+          >
+            Verify
+          </button>
+        </form>
+
+        <div className="flex items-center justify-between pt-1 text-[11px]">
+          <button
+            type="button"
+            onClick={() => onNavigateToVerify && onNavigateToVerify('MYF-QC-26-239')}
+            className="text-slate-600 hover:text-slate-900 underline cursor-pointer"
+          >
+            Quick View: MYF-QC-26-239
+          </button>
+          {onOpenScanner && (
+            <button
+              type="button"
+              onClick={onOpenScanner}
+              className="text-emerald-700 hover:text-emerald-900 font-semibold cursor-pointer"
+            >
+              Scan QR via Camera →
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

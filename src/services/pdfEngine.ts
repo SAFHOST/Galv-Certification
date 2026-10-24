@@ -16,24 +16,84 @@ export interface PDFGenerationResult {
  * Resolves the full public verification URL for a given cert_id.
  * Architecture: internal ID -> verification endpoint -> in-memory QR -> PDF embed.
  */
-export function buildVerificationUrl(certId: string, customDomain?: string): string {
+export function buildVerificationUrl(cert: CertificateData | string, customDomain?: string): string {
+  const certId = typeof cert === 'string' ? cert : cert.cert_id;
   const cleanId = encodeURIComponent(certId.trim());
+  let base = 'https://certifficationsystem.vercel.app';
+
   if (customDomain && customDomain.trim()) {
-    const base = customDomain.trim().replace(/\/+$/, '');
-    return `${base}/verify/${cleanId}`;
+    base = customDomain.trim().replace(/\/+$/, '');
+  } else if (typeof window !== 'undefined' && window.location?.origin) {
+    base = window.location.origin.replace(/\/+$/, '');
+  } else if (typeof process !== 'undefined' && process.env?.APP_URL) {
+    base = process.env.APP_URL.replace(/\/+$/, '');
+  } else if (typeof process !== 'undefined') {
+    const vercelHost = process.env?.VERCEL_PROJECT_PRODUCTION_URL || process.env?.VERCEL_URL;
+    if (vercelHost) {
+      base = `https://${vercelHost.replace(/\/+$/, '')}`;
+    }
   }
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/verify/${cleanId}`;
+
+  const targetUrl = `${base}/verify/${cleanId}`;
+
+  // If full certificate object provided, encode verified parameters into QR URL
+  // so mobile phone scanners / new devices immediately resolve 100% authentically
+  if (typeof cert === 'object' && cert.client) {
+    const firstItem = cert.line_items?.[0];
+    const params = new URLSearchParams({
+      c: cert.client,
+      s: firstItem?.site_id || '',
+      desc: firstItem?.description || '',
+      q: String(firstItem?.quantity || 1),
+      u: firstItem?.unit || '3M',
+      dft: String(firstItem?.measured_dft_um || 91.5),
+      d: cert.issue_date,
+      p: cert.project_name || '',
+      po: cert.purchase_order_no || '',
+      dn: cert.delivery_note_no || '',
+    });
+    return `${targetUrl}?${params.toString()}`;
   }
-  if (typeof process !== 'undefined' && process.env?.APP_URL) {
-    const base = process.env.APP_URL.replace(/\/+$/, '');
-    return `${base}/verify/${cleanId}`;
+
+  return targetUrl;
+}
+
+/**
+ * Renders crisp, connected Arabic header using canvas when available
+ */
+function renderArabicHeaderPng(): Uint8Array | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 190;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#000000';
+
+    // Line 1: مصنع محمد يحيى العسيري
+    ctx.font = 'bold 36px "Segoe UI", Arial, Tahoma, sans-serif';
+    ctx.fillText('مصنع محمد يحيى العسيري', 620, 50);
+
+    // Line 2: للصناعات المعدنية  س.ت : 1010207045
+    ctx.font = '26px "Segoe UI", Arial, Tahoma, sans-serif';
+    ctx.fillText('للصناعات المعدنية  س.ت. : 1010207045', 620, 106);
+
+    // Line 3: الرقم الضريبي : 302154658900006
+    ctx.font = '24px "Segoe UI", Arial, Tahoma, sans-serif';
+    ctx.fillText('الرقم الضريبي : 302154658900006', 620, 158);
+
+    const dataUrl = canvas.toDataURL('image/png');
+    return dataUrlToUint8Array(dataUrl);
+  } catch {
+    return null;
   }
-  const vercelHost = typeof process !== 'undefined' ? (process.env?.VERCEL_PROJECT_PRODUCTION_URL || process.env?.VERCEL_URL) : undefined;
-  if (vercelHost) {
-    return `https://${vercelHost.replace(/\/+$/, '')}/verify/${cleanId}`;
-  }
-  return `https://certifficationsystem.vercel.app/verify/${cleanId}`;
 }
 
 /**
@@ -83,7 +143,7 @@ export async function generateCertificatePDF(
 ): Promise<PDFGenerationResult> {
   // 1. Strictly bind the verification endpoint to this certificate's ID
   const host = options?.hostDomain || (typeof window !== 'undefined' ? window.location.origin : undefined);
-  const verificationUrl = buildVerificationUrl(certData.cert_id, host);
+  const verificationUrl = buildVerificationUrl(certData, host);
   certData.verification_url = verificationUrl;
 
   // 2. Generate canonical payload and SHA-256 hash
@@ -100,7 +160,7 @@ export async function generateCertificatePDF(
 
   const pdfDoc = await PDFDocument.create();
   pdfDoc.setTitle(`MYMF Galvanization Certificate ${certData.cert_id}`);
-  pdfDoc.setAuthor('Mohammed Yehya Al-Aseery For Metal Industries (MYMAF)');
+  pdfDoc.setAuthor('Mohammed Yehya Al-Aseery For Metal Industries (MYMF)');
   pdfDoc.setSubject(`Hot-Dip Galvanization Inspection Certificate - BS EN ISO 1461 - ${certData.cert_id}`);
   pdfDoc.setKeywords(['QA/QC', 'Galvanization', 'ISO 1461', certData.cert_id, certData.client]);
 
@@ -121,18 +181,64 @@ export async function generateCertificatePDF(
   const signImageBytes = dataUrlToUint8Array(TEMPLATE_ASSETS.signatureJpgBase64);
   const signImage = await pdfDoc.embedJpg(signImageBytes);
 
+  // Harmonize English CR NO to 1010207045 (exact match with Arabic side)
+  page.drawRectangle({
+    x: 75,
+    y: 654,
+    width: 175,
+    height: 14,
+    color: rgb(1, 1, 1),
+  });
+  page.drawText('CR NO: 1010207045', {
+    x: 76.5,
+    y: 657,
+    size: 9.96,
+    font: fontRegular,
+    color: rgb(0, 0, 0),
+  });
+
+  // Cover fragmented Arabic header area in template and overlay connected Arabic image
+  page.drawRectangle({
+    x: 360,
+    y: 636,
+    width: 215,
+    height: 76,
+    color: rgb(1, 1, 1),
+  });
+
+  const arabicBytes = renderArabicHeaderPng();
+  if (arabicBytes) {
+    try {
+      const arabicImg = await pdfDoc.embedPng(arabicBytes);
+      page.drawImage(arabicImg, {
+        x: 372,
+        y: 642,
+        width: 195,
+        height: 58,
+      });
+    } catch {}
+  }
+
+  // Draw full-width horizontal rule under both English and Arabic headers
+  page.drawLine({
+    start: { x: 72, y: 628 },
+    end: { x: 557, y: 628 },
+    color: rgb(0, 0, 0),
+    thickness: 1,
+  });
+
   // 1. Dynamic Certificate Reference Number
   // Overwrite "Cert. Ref. No.: MYF-QC-25-116."
   page.drawRectangle({
     x: 75,
-    y: 628,
+    y: 631,
     width: 280,
-    height: 18,
+    height: 16,
     color: rgb(1, 1, 1),
   });
   const refText = `Cert. Ref. No.: ${certData.cert_id}.`;
   page.drawText(refText, {
-    x: 78.3,
+    x: 76.5,
     y: 635.02,
     size: 9.96,
     font: fontRegular,
@@ -187,6 +293,14 @@ export async function generateCertificatePDF(
     color: rgb(0, 0, 0),
   });
 
+  // Underline under attestation paragraph
+  page.drawLine({
+    start: { x: 112, y: 468 },
+    end: { x: 557, y: 468 },
+    color: rgb(0, 0, 0),
+    thickness: 1,
+  });
+
   // 4. Dynamic Line Items Table
   // Clear the existing template table area completely
   page.drawRectangle({
@@ -215,7 +329,8 @@ export async function generateCertificatePDF(
     color: rgb(1, 1, 1),
   });
 
-  const colX = [72, 112, 165, 455, 508, 557];
+  // Expanded columns: Item# (38), Site# (75), Description (265), Quantity (58), Unit (49)
+  const colX = [72, 110, 185, 450, 508, 557];
 
   // Vertical dividers in header
   for (let i = 1; i < colX.length - 1; i++) {
@@ -227,11 +342,17 @@ export async function generateCertificatePDF(
     });
   }
 
-  page.drawText('Item #', { x: 79, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-  page.drawText('Site #', { x: 125, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-  page.drawText('Description', { x: 278, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-  page.drawText('Quantity', { x: 462, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
-  page.drawText('Unit', { x: 522, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
+  const itemHdrX = 72 + (38 - fontBold.widthOfTextAtSize('Item #', 9)) / 2;
+  const siteHdrX = 110 + (75 - fontBold.widthOfTextAtSize('Site #', 9)) / 2;
+  const descHdrX = 185 + (265 - fontBold.widthOfTextAtSize('Description', 9)) / 2;
+  const qtyHdrX = 450 + (58 - fontBold.widthOfTextAtSize('Quantity', 9)) / 2;
+  const unitHdrX = 508 + (49 - fontBold.widthOfTextAtSize('Unit', 9)) / 2;
+
+  page.drawText('Item #', { x: itemHdrX, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
+  page.drawText('Site #', { x: siteHdrX, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
+  page.drawText('Description', { x: descHdrX, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
+  page.drawText('Quantity', { x: qtyHdrX, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
+  page.drawText('Unit', { x: unitHdrX, y: startY - 12.5, size: 9, font: fontBold, color: rgb(0, 0, 0) });
 
   // Draw Table Rows
   let curRowY = startY - headerH;
@@ -263,28 +384,33 @@ export async function generateCertificatePDF(
     const textY = rowBottom + (rowH - 9) / 2 + 1;
 
     // Item #
-    page.drawText(String(item.item_no), {
-      x: 89,
+    const itemStr = String(item.item_no);
+    const itemX = 72 + (38 - fontRegular.widthOfTextAtSize(itemStr, 9)) / 2;
+    page.drawText(itemStr, {
+      x: itemX,
       y: textY,
       size: 9,
       font: fontRegular,
       color: rgb(0, 0, 0),
     });
 
-    // Site #
-    page.drawText(item.site_id, {
-      x: 121,
+    // Site # (centered in 75pt width to prevent overlap)
+    const siteStr = item.site_id || '';
+    const siteW = fontRegular.widthOfTextAtSize(siteStr, 9);
+    const siteX = Math.max(112, 110 + (75 - siteW) / 2);
+    page.drawText(siteStr, {
+      x: siteX,
       y: textY,
       size: 9,
       font: fontRegular,
       color: rgb(0, 0, 0),
     });
 
-    // Description (cleanly truncated if long)
+    // Description (cleanly padded)
     const rawDesc = item.description || '';
-    const desc = rawDesc.length > 55 ? rawDesc.slice(0, 52) + '...' : rawDesc;
+    const desc = rawDesc.length > 50 ? rawDesc.slice(0, 47) + '...' : rawDesc;
     page.drawText(desc, {
-      x: 172,
+      x: 192,
       y: textY,
       size: 9,
       font: fontRegular,
@@ -292,8 +418,10 @@ export async function generateCertificatePDF(
     });
 
     // Quantity
-    page.drawText(String(item.quantity), {
-      x: 479,
+    const qtyStr = String(item.quantity);
+    const qtyX = 450 + (58 - fontRegular.widthOfTextAtSize(qtyStr, 9)) / 2;
+    page.drawText(qtyStr, {
+      x: qtyX,
       y: textY,
       size: 9,
       font: fontRegular,
@@ -301,15 +429,16 @@ export async function generateCertificatePDF(
     });
 
     // Unit
-    page.drawText(item.unit || '3M', {
-      x: 524,
+    const unitStr = item.unit || '3M';
+    const unitX = 508 + (49 - fontRegular.widthOfTextAtSize(unitStr, 9)) / 2;
+    page.drawText(unitStr, {
+      x: unitX,
       y: textY,
       size: 9,
       font: fontRegular,
       color: rgb(0, 0, 0),
     });
 
-    curRowY -= rowH;
   }
 
   // 5. Ensure Stamp & Signature are crisp
