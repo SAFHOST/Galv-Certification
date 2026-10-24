@@ -3,11 +3,12 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Upload, FileSpreadsheet, Download, RefreshCw } from 'lucide-react';
 import type { CertificateData, LineItem } from '../types/certificate';
-import { generateCertificatePDF } from '../services/pdfEngine';
 import { certificateRepository } from '../services/storage';
 
 interface BulkCertificateGeneratorProps {
   onSuccessViewLedger: () => void;
+  onSelectCertificate: (certId: string) => void;
+  onPreviewPDF: (cert: CertificateData) => void;
 }
 
 interface ParsedSiteRow {
@@ -19,7 +20,7 @@ interface ParsedSiteRow {
   measuredDft: number;
 }
 
-export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> = ({ onSuccessViewLedger }) => {
+export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> = ({ onSuccessViewLedger, onSelectCertificate, onPreviewPDF }) => {
   const [client, setClient] = useState('Materials of M/S GBH');
   const [projectName, setProjectName] = useState('STC Telecom Site Extension Project');
   const [issueDate, setIssueDate] = useState('24 OCT 2026');
@@ -59,11 +60,34 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
       const zip = new JSZip();
       const createdCerts: CertificateData[] = [];
       const pdfBytesMap = new Map<string, Uint8Array>();
-      const currentHost = typeof window !== 'undefined' ? window.location.origin : 'https://mymf.com.sa';
 
-      for (let i = 0; i < parsedData.length; i++) {
-        const row = parsedData[i];
+      // Group data by siteId
+      const groupedData = parsedData.reduce((acc, row) => {
+        if (!acc[row.siteId]) {
+          acc[row.siteId] = [];
+        }
+        acc[row.siteId].push(row);
+        return acc;
+      }, {} as Record<string, ParsedSiteRow[]>);
+
+      const siteIds = Object.keys(groupedData);
+
+      for (let i = 0; i < siteIds.length; i++) {
+        const siteId = siteIds[i];
+        const rows = groupedData[siteId];
         const certId = `MYF-QC-26-${254 + i}`;
+        
+        const lineItems: LineItem[] = rows.map((row, index) => ({
+          item_no: index + 1,
+          site_id: row.siteId,
+          description: row.description,
+          quantity: row.quantity,
+          unit: row.unit,
+          heat_number: row.heatNumber,
+          measured_dft_um: row.measuredDft,
+          visual_inspection: 'PASS'
+        }));
+
         const certPayload: CertificateData = {
           cert_id: certId,
           issue_date: issueDate,
@@ -71,15 +95,27 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
           project_name: projectName,
           purchase_order_no: poNumber,
           status: 'AUTHENTIC_VERIFIED',
-          line_items: [{ item_no: 1, site_id: row.siteId, description: row.description, quantity: row.quantity, unit: row.unit, heat_number: row.heatNumber, measured_dft_um: row.measuredDft, visual_inspection: 'PASS' } as LineItem],
+          line_items: lineItems,
           created_at: new Date().toISOString(),
-          technical_params: { standard: 'BS EN ISO 1461', bath_temperature_c: bathTemp, zinc_purity_percent: zincPurity, min_required_dft_um: minDft }
+          technical_params: { 
+            standard: 'BS EN ISO 1461', 
+            bath_temperature_c: bathTemp, 
+            zinc_purity_percent: zincPurity, 
+            min_required_dft_um: minDft 
+          }
         } as CertificateData;
 
-        const pdfGen = await generateCertificatePDF(certPayload, { hostDomain: currentHost });
+        const response = await fetch('/api/certificates/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(certPayload),
+        });
+        if (!response.ok) throw new Error(`Failed to generate PDF for ${certId}`);
+        const pdfBytes = new Uint8Array(await response.arrayBuffer());
+
         createdCerts.push(certPayload);
-        pdfBytesMap.set(certId, pdfGen.pdfBytes);
-        zip.file(`${certId}_Site_${row.siteId}_Galv_Cert.pdf`, pdfGen.pdfBytes);
+        pdfBytesMap.set(certId, pdfBytes);
+        zip.file(`${certId}_Site_${siteId}_Galv_Cert.pdf`, pdfBytes);
       }
 
       await certificateRepository.saveBulk(createdCerts, pdfBytesMap);
@@ -150,7 +186,30 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
               <tr><th className="p-2 border">Site</th><th className="p-2 border">Description</th><th className="p-2 border">Qty</th></tr>
             </thead>
             <tbody>
-              {parsedData.map((row, i) => <tr key={i}><td className="p-2 border">{row.siteId}</td><td className="p-2 border">{row.description}</td><td className="p-2 border">{row.quantity}</td></tr>)}
+              {(() => {
+                const groups = parsedData.reduce((acc, row) => {
+                  if (!acc[row.siteId]) acc[row.siteId] = [];
+                  acc[row.siteId].push(row);
+                  return acc;
+                }, {} as Record<string, ParsedSiteRow[]>);
+                
+                return Object.entries(groups).map(([siteId, rows], i) => (
+                  <React.Fragment key={siteId}>
+                    <tr className="bg-slate-100 font-bold">
+                      <td colSpan={3} className="p-2 border text-[10px]">
+                        CERTIFICATE #{i + 1} - SITE: {siteId} ({rows.length} Items)
+                      </td>
+                    </tr>
+                    {rows.map((row, j) => (
+                      <tr key={`${siteId}-${j}`}>
+                        <td className="p-2 border pl-4 text-slate-500">{row.siteId}</td>
+                        <td className="p-2 border">{row.description}</td>
+                        <td className="p-2 border text-center">{row.quantity} {row.unit}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ));
+              })()}
             </tbody>
           </table>
           <button onClick={handleGenerate} disabled={isProcessing} className="w-full py-3 bg-slate-900 text-white rounded-xl">

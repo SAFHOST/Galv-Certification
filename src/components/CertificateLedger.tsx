@@ -20,7 +20,6 @@ import type { CertificateData } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { generateCertificatePDF } from '../services/pdfEngine';
 
 interface CertificateLedgerProps {
   onSelectCertificate: (certId: string) => void;
@@ -82,7 +81,14 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
     const selectedCerts = certificates.filter((c) => selectedIds.includes(c.cert_id));
 
     for (const cert of selectedCerts) {
-      const { pdfBytes, fileName } = await generateCertificatePDF(cert);
+      const response = await fetch('/api/certificates/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cert),
+      });
+      if (!response.ok) throw new Error(`Failed to generate PDF for ${cert.cert_id}`);
+      const pdfBytes = new Uint8Array(await response.arrayBuffer());
+      const fileName = `${cert.cert_id.replace(/[^a-zA-Z0-9-_]/g, '_')}_MYMF_Cert.pdf`;
       zip.file(fileName, pdfBytes);
     }
 

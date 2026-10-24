@@ -116,6 +116,7 @@ export function createExpressApp() {
     }
   });
 
+
   // Download / Stream compiled PDF in-memory
   apiRouter.get('/certificates/:id/pdf', async (req, res) => {
     try {
@@ -135,6 +136,18 @@ export function createExpressApp() {
       res.end(Buffer.from(pdfBytes));
     } catch (err: any) {
       res.status(500).send(`PDF Generation Error: ${err.message}`);
+    }
+  });
+
+  // Generate and preview PDF in-memory (no storage)
+  apiRouter.post('/certificates/preview', async (req, res) => {
+    try {
+      const certData = req.body;
+      const pdfGen = await generateCertificatePDF(certData);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.end(Buffer.from(pdfGen.pdfBytes));
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { CertificateData } from './types/certificate';
-import { generateCertificatePDF } from './services/pdfEngine';
+import QRCode from 'qrcode';
 import { authService, type AuthUser } from './services/auth';
 import { Navbar, type ActiveTab } from './components/Navbar';
 import { CertificateLedger } from './components/CertificateLedger';
@@ -11,14 +11,13 @@ import { StaffLogin } from './components/StaffLogin';
 import { QRScannerModal } from './components/QRScannerModal';
 import { QRDisplayModal } from './components/QRDisplayModal';
 import { PDFPreviewModal } from './components/PDFPreviewModal';
-import { LandingPage } from './components/LandingPage';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => authService.isAuthenticated());
 
-  // Navigation & View state - Default to Landing page
-  const [activeTab, setActiveTab] = useState<ActiveTab>('landing');
+  // Navigation & View state - Default to Login UI on landing
+  const [activeTab, setActiveTab] = useState<ActiveTab>('login');
   const [selectedCertId, setSelectedCertId] = useState<string>('MYF-QC-26-239');
   const [isPublicVerificationMode, setIsPublicVerificationMode] = useState<boolean>(false);
 
@@ -58,7 +57,7 @@ export default function App() {
           setActiveTab('ledger');
         } else {
           setIsPublicVerificationMode(false);
-          setActiveTab('landing');
+          setActiveTab('login');
         }
       }
     };
@@ -72,18 +71,6 @@ export default function App() {
     if (tab === 'login') {
       setIsPublicVerificationMode(false);
       setActiveTab('login');
-      return;
-    }
-    
-    if (tab === 'landing') {
-      setIsPublicVerificationMode(false);
-      setActiveTab('landing');
-      return;
-    }
-    
-    if (tab === 'landing') {
-      setIsPublicVerificationMode(false);
-      setActiveTab('landing');
       return;
     }
 
@@ -122,8 +109,10 @@ export default function App() {
   const handleOpenQr = async (cert: CertificateData) => {
     setModalCert(cert);
     try {
-      const gen = await generateCertificatePDF(cert);
-      setModalQrUrl(gen.qrDataUrl);
+      const currentOrigin = window.location.origin;
+      const verificationUrl = `${currentOrigin}/verify/${encodeURIComponent(cert.cert_id)}`;
+      const qrDataUrl = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'H', margin: 0, width: 280 });
+      setModalQrUrl(qrDataUrl);
     } catch {
       setModalQrUrl(null);
     }
@@ -177,21 +166,15 @@ export default function App() {
           />
         )}
 
-        {/* LANDING PAGE */}
-        {activeTab === 'landing' && (
-          <LandingPage
-            onNavigateToLogin={() => navigateToTab('login')}
-            onNavigateToVerify={() => navigateToTab('verify')}
-          />
-        )}
-
         {/* STAFF LOGIN VIEW */}
         {activeTab === 'login' && !isAuthenticated && (
           <StaffLogin
             onSuccess={handleLoginSuccess}
             onNavigateToVerify={handleOpenVerification}
             onOpenScanner={() => setIsScannerOpen(true)}
-            onCancel={() => navigateToTab('landing')}
+            onCancel={() => {
+              handleOpenVerification(selectedCertId || 'MYF-QC-26-239');
+            }}
           />
         )}
 

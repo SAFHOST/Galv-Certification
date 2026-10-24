@@ -1,6 +1,5 @@
 import type { CertificateData, StorageResult, VerificationResult } from '../types/certificate';
 import { generateSHA256Hash, getCanonicalCertificatePayload, verifyCertificateIntegrity } from './security';
-import { generateCertificatePDF } from './pdfEngine';
 import { db, auth } from '../lib/firebase';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, query, Timestamp } from 'firebase/firestore';
 
@@ -224,6 +223,16 @@ class CertificateRepository {
     }
 
     this.initialized = true;
+  }
+  
+  async getPDF(certId: string): Promise<Uint8Array> {
+    await this.initialize();
+    if (this.pdfCache.has(certId)) {
+        return this.pdfCache.get(certId)!;
+    }
+    // If not in cache, we might need to regenerate it or it's not stored in memory
+    // For now, throw an error if not in cache
+    throw new Error(`PDF for certificate ${certId} not found in memory`);
   }
 
 
@@ -492,23 +501,6 @@ class CertificateRepository {
     return certs.length;
   }
 
-  async getPDF(certId: string): Promise<Uint8Array> {
-    await this.initialize();
-    const cert = await this.getById(certId);
-    if (!cert) {
-      throw new Error(`Certificate with ID '${certId}' was not found.`);
-    }
-
-    // Check in-memory cache
-    if (this.pdfCache.has(cert.cert_id)) {
-      return this.pdfCache.get(cert.cert_id)!;
-    }
-
-    // Generate fresh on-demand strictly for this certificate
-    const gen = await generateCertificatePDF(cert);
-    this.pdfCache.set(cert.cert_id, gen.pdfBytes);
-    return gen.pdfBytes;
-  }
 
   async verify(certId: string): Promise<VerificationResult> {
     await this.initialize();

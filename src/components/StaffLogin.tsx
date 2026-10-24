@@ -55,7 +55,7 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({
         {/* Header with MYMF Branding */}
         <div className="p-6 text-center border-b border-slate-100 bg-slate-50">
           <img
-            src="/assets/template/mymf_logo.jpg"
+            src="/assets/aistudio/image_576b524e.png"
             alt="MYMF Logo"
             className="h-16 mx-auto mb-2 object-contain"
           />

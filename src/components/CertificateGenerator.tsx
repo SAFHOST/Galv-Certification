@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { Plus, Trash2, ShieldCheck, RefreshCw, Eye, Download, CheckCircle2, ArrowRight } from 'lucide-react';
 import type { CertificateData, LineItem } from '../types/certificate';
 import { CertificateDataSchema } from '../types/certificate';
-import { generateCertificatePDF } from '../services/pdfEngine';
 import { certificateRepository } from '../services/storage';
-
+import QRCode from 'qrcode';
 interface CertificateGeneratorProps {
   onCertificateCreated: (certId: string) => void;
   onPreviewPDF: (cert: CertificateData) => void;
@@ -154,18 +153,29 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({
         return;
       }
 
-      // Step 3 & 4: In-memory PDF generation with QR code embedded
-      const pdfGen = await generateCertificatePDF(payload);
-      payload.sha256_hash = pdfGen.sha256Hash;
-      payload.verification_url = pdfGen.verificationUrl;
+      // Step 3 & 4: Server-side PDF generation
+      const response = await fetch('/api/certificates/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-      // Step 5 & 6: Persist into database & storage binding
-      await certificateRepository.save(payload, pdfGen.pdfBytes);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate certificate');
+      }
+
+      const { sha256_hash, verification_url } = await response.json();
+      payload.sha256_hash = sha256_hash;
+      payload.verification_url = verification_url;
+      
+      // Need QR code for preview
+      const qrDataUrl = await QRCode.toDataURL(verification_url, { errorCorrectionLevel: 'H', margin: 0, width: 280 });
 
       setPreviewData({
-        qrDataUrl: pdfGen.qrDataUrl,
-        sha256Hash: pdfGen.sha256Hash,
-        verificationUrl: pdfGen.verificationUrl,
+        qrDataUrl: qrDataUrl,
+        sha256Hash: sha256_hash,
+        verificationUrl: verification_url,
       });
 
       // Navigate to field verification

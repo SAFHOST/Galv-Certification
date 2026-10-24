@@ -19,7 +19,7 @@ import {
 import type { CertificateData, VerificationResult } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
 import { formatHashDigest } from '../services/security';
-import { generateQRCodeDataUrl, buildVerificationUrl } from '../services/pdfEngine';
+import { generateQRCodeDataUrl, buildVerificationUrl } from '../services/pdfUtils';
 
 interface VerificationPortalProps {
   certId: string;
@@ -182,21 +182,26 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
                 <span className="text-slate-500">Client:</span>
                 <span className="font-semibold text-right">{cert.client}</span>
             </div>
-            {cert.line_items?.[0] && (
-                <>
-                    <div className="flex justify-between">
-                        <span className="text-slate-500">Site ID:</span>
-                        <span className="font-mono font-semibold">{cert.line_items[0].site_id}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <span className="text-slate-500">Article Details:</span>
-                        <span className="font-semibold">{cert.line_items[0].description}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-slate-500">Quantity:</span>
-                        <span className="font-semibold">{cert.line_items[0].quantity} {cert.line_items[0].unit}</span>
-                    </div>
-                </>
+            {cert.line_items && cert.line_items.length > 0 && (
+                <div className="space-y-4 pt-2 border-t border-slate-50">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Line Items</div>
+                    {cert.line_items.map((item, idx) => (
+                        <div key={idx} className="space-y-2 pb-3 border-b border-slate-50 last:border-0 last:pb-0">
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">Item #{item.item_no}:</span>
+                                <span className="font-mono font-semibold">{item.site_id}</span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-slate-500 text-[10px]">Description:</span>
+                                <span className="font-semibold">{item.description}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-500 text-[10px]">Quantity:</span>
+                                <span className="font-semibold">{item.quantity} {item.unit}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
 
