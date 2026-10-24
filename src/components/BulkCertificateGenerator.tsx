@@ -41,12 +41,12 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
       const workbook = read(data, { type: 'array' });
       const rows = utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
       const parsed: ParsedSiteRow[] = rows.map((row: any) => ({
-        siteId: String(row['Site #'] || row['site_id'] || '').trim(),
-        description: String(row['Description of Articles'] || row['description'] || '').trim(),
-        quantity: Number(row['Quantity'] || 1),
-        unit: String(row['Unit'] || 'PCS').trim(),
-        heatNumber: String(row['Heat Number'] || 'HT-N/A').trim(),
-        measuredDft: Number(row['Measured DFT (µm)'] || 91.5),
+        siteId: String(row['Site #'] || row['site_id'] || row['Site ID'] || row['SITE ID'] || row['Site No'] || row['Site'] || '').trim(),
+        description: String(row['Description of Articles'] || row['description'] || row['Description'] || row['ARTICLE'] || row['Article'] || '').trim(),
+        quantity: Number(row['Quantity'] || row['QTY'] || row['qty'] || 1),
+        unit: String(row['Unit'] || row['UNIT'] || 'PCS').trim(),
+        heatNumber: String(row['Heat Number'] || row['HEAT NO'] || row['Heat No'] || row['heat_number'] || 'HT-N/A').trim(),
+        measuredDft: Number(row['Measured DFT (µm)'] || row['Measured DFT'] || row['DFT'] || row['dft'] || 91.5),
       }));
       setParsedData(parsed);
       setError(null);

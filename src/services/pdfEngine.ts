@@ -23,30 +23,36 @@ let globalBrowser: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
   if (globalBrowser && globalBrowser.isConnected()) {
-    return globalBrowser;
+    try {
+      // Check if we can actually use the browser
+      const pages = await globalBrowser.pages();
+      return globalBrowser;
+    } catch (e) {
+      console.warn('[PDF Engine] Browser connection stale, restarting...');
+      globalBrowser = null;
+    }
   }
   
-  console.log('[PDF Engine] Launching new Puppeteer instance...');
+  console.log('[PDF Engine] Launching Puppeteer...');
   try {
     globalBrowser = await puppeteer.launch({
       headless: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
         '--disable-gpu',
-        '--no-first-run',
         '--no-zygote',
         '--single-process',
-        '--disable-extensions',
-        '--font-render-hinting=none'
+        '--font-render-hinting=none',
+        '--disable-extensions'
       ]
     });
     return globalBrowser;
-  } catch (err) {
-    console.error('[PDF Engine] Failed to launch Puppeteer:', err);
-    throw new Error('PDF Engine failed to initialize. Please try again.');
+  } catch (err: any) {
+    console.error('[PDF Engine] Puppeteer Launch Error:', err);
+    throw new Error(`PDF Engine Init Failed: ${err.message || 'Check environment dependencies'}`);
   }
 }
 

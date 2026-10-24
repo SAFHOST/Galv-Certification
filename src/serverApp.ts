@@ -111,8 +111,12 @@ export function createExpressApp() {
         data: certData,
       });
     } catch (err: any) {
-      console.error('Generation error:', err);
-      res.status(500).json({ success: false, error: err.message });
+      console.error('[API] Generation error:', err);
+      res.status(500).json({ 
+        success: false, 
+        error: err.message || 'An internal server error occurred during generation',
+        code: 'GEN_FAIL'
+      });
     }
   });
 
@@ -135,7 +139,12 @@ export function createExpressApp() {
       res.setHeader('Content-Length', pdfBytes.byteLength.toString());
       res.end(Buffer.from(pdfBytes));
     } catch (err: any) {
-      res.status(500).send(`PDF Generation Error: ${err.message}`);
+      console.error(`[API] PDF Fetch Error [${req.params.id}]:`, err);
+      res.status(500).json({ 
+        success: false, 
+        error: `PDF Generation Error: ${err.message}`,
+        code: 'PDF_FETCH_FAIL'
+      });
     }
   });
 
@@ -143,11 +152,26 @@ export function createExpressApp() {
   apiRouter.post('/certificates/preview', async (req, res) => {
     try {
       const certData = req.body;
+      if (!certData || !certData.cert_id) {
+        console.warn('[API] Preview requested with missing data');
+        res.status(400).json({ success: false, error: 'Incomplete certificate data' });
+        return;
+      }
+      
+      console.log(`[API] Previewing certificate: ${certData.cert_id}`);
       const pdfGen = await generateCertificatePDF(certData);
+      
       res.setHeader('Content-Type', 'application/pdf');
-      res.end(Buffer.from(pdfGen.pdfBytes));
+      res.setHeader('X-Certificate-ID', certData.cert_id);
+      res.send(Buffer.from(pdfGen.pdfBytes));
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      console.error(`[API] Preview Error [${req.body?.cert_id}]:`, err);
+      // ALWAYS return JSON for errors so frontend can parse it
+      res.status(500).json({ 
+        success: false, 
+        error: err.message || 'PDF Preview Generation failed',
+        code: 'PDF_GEN_FAIL'
+      });
     }
   });
 
