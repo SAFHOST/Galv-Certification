@@ -896,7 +896,6 @@ function createExpressApp() {
     }
   });
   app.use("/api", apiRouter);
-  app.use(apiRouter);
   return app;
 }
 
