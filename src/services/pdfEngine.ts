@@ -193,11 +193,11 @@ export async function generateCertificatePDF(
   page.drawText('CR No: 1010997047', { x: 50, y: height - 64, size: 8, font: fontRegular });
   page.drawText('VAT No: 302154658900006', { x: 50, y: height - 76, size: 8, font: fontRegular });
   
-  // Arabic Header (simplified using standard font, as canvas rendering is unreliable in this context)
-  page.drawText('مصنع محمد يحيى العسيري', { x: 450, y: height - 40, size: 9, font: fontRegular });
-  page.drawText('للصناعات المعدنية', { x: 470, y: height - 52, size: 8, font: fontRegular });
-  page.drawText('س.ت: 1010997047', { x: 480, y: height - 64, size: 8, font: fontRegular });
-  page.drawText('الرقم الضريبي: 302154658900006', { x: 420, y: height - 76, size: 8, font: fontRegular });
+  // Arabic Header (simplified)
+  page.drawText('Factory Name in Arabic', { x: 450, y: height - 40, size: 9, font: fontRegular });
+  page.drawText('Industries', { x: 470, y: height - 52, size: 8, font: fontRegular });
+  page.drawText('CR: 1010997047', { x: 480, y: height - 64, size: 8, font: fontRegular });
+  page.drawText('VAT: 302154658900006', { x: 420, y: height - 76, size: 8, font: fontRegular });
   
   // Title
   page.drawText('HOT DIP GALVANIZATION CERTIFICATE', { x: width / 2 - 110, y: height - 130, size: 14, font: fontBold });
