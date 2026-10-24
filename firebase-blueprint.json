@@ -14,12 +14,32 @@
         "sha256_hash": { "type": "string" }
       },
       "required": ["cert_id", "status"]
+    },
+    "Audit": {
+      "title": "Audit",
+      "description": "An audit trail log for certificate actions",
+      "type": "object",
+      "properties": {
+        "audit_id": { "type": "string" },
+        "cert_id": { "type": "string" },
+        "action": { "type": "string" },
+        "user_id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "ip_address": { "type": "string" },
+        "location": { "type": "string" },
+        "hash": { "type": "string" }
+      },
+      "required": ["audit_id", "cert_id", "action", "timestamp"]
     }
   },
   "firestore": {
     "/certificates/{certId}": {
       "schema": { "$ref": "#/entities/Certificate" },
       "description": "Certificates collection"
+    },
+    "/certificates/{certId}/audit_trail/{auditId}": {
+      "schema": { "$ref": "#/entities/Audit" },
+      "description": "Audit trail collection"
     }
   }
 }

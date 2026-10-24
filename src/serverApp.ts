@@ -233,6 +233,7 @@ export function createExpressApp() {
           created_at: new Date().toISOString(),
           verification_url: '',
           sha256_hash: '',
+          verification_count: 0,
         };
         await certificateRepository.save(hydratedCert);
         result = await certificateRepository.verify(certId);

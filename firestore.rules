@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isValidCertificate(data) {
+        return data.keys().hasAll(['cert_id', 'status']) &&
+               data.keys().hasOnly(['cert_id', 'status', 'issue_date', 'client', 'project_name', 'created_at', 'sha256_hash']) &&
+               data.cert_id is string && data.cert_id.size() <= 128 &&
+               data.status is string && data.status.size() <= 64;
+    }
+    
+    function isValidAudit(data) {
+        return data.keys().hasAll(['audit_id', 'cert_id', 'action', 'timestamp']) &&
+               data.audit_id is string && data.audit_id.size() <= 128 &&
+               data.cert_id is string && data.cert_id.size() <= 128 &&
+               data.action is string && data.action.size() <= 128 &&
+               data.timestamp is string && data.timestamp.size() <= 64;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /certificates/{certId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(certId) && isValidCertificate(incoming());
+      allow update: if isSignedIn() && isValidCertificate(incoming()) && incoming().cert_id == existing().cert_id;
+      
+      match /audit_trail/{auditId} {
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(auditId) && isValidAudit(incoming()) && incoming().cert_id == certId;
+      }
+    }
+  }
+}

@@ -134,6 +134,7 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({
       },
       notes: 'Certified that the materials listed have been hot-dip galvanized in strict compliance with BS EN ISO 1461 standard specifications.',
       verification_url: targetUrl,
+      verification_count: 0,
       created_at: new Date().toISOString(),
     };
   };

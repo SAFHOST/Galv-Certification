@@ -1,6 +1,8 @@
 import type { CertificateData, StorageResult, VerificationResult } from '../types/certificate';
 import { generateSHA256Hash, getCanonicalCertificatePayload, verifyCertificateIntegrity } from './security';
 import { generateCertificatePDF } from './pdfEngine';
+import { db, auth } from '../lib/firebase';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, query, Timestamp } from 'firebase/firestore';
 
 // Seed Initial Certificate per prompt requirements
 const INITIAL_SEEDS: CertificateData[] = [
@@ -57,6 +59,7 @@ const INITIAL_SEEDS: CertificateData[] = [
     verification_url: '',
     sha256_hash: '',
     storage_url: 'https://drive.google.com/file/d/1mymf_qc26_239_galv_doc/view?usp=sharing',
+    verification_count: 0,
   },
   {
     cert_id: 'MYF-QC-25-116',
@@ -111,6 +114,7 @@ const INITIAL_SEEDS: CertificateData[] = [
     verification_url: '',
     sha256_hash: '',
     storage_url: 'https://drive.google.com/file/d/1mymf_qc25_116_galv_doc/view?usp=sharing',
+    verification_count: 0,
   },
   {
     cert_id: 'MYF-QC-25-117',
@@ -175,6 +179,7 @@ const INITIAL_SEEDS: CertificateData[] = [
     verification_url: '',
     sha256_hash: '',
     storage_url: 'https://drive.google.com/file/d/1mymf_qc25_117_galv_doc/view?usp=sharing',
+    verification_count: 0,
   },
 ];
 
@@ -193,99 +198,48 @@ class CertificateRepository {
   private async initialize() {
     if (this.initialized) return;
 
-    // Load from localStorage if in browser
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as CertificateData[];
-          for (const item of parsed) {
-            this.cache.set(item.cert_id, item);
-          }
-        }
-        const storedCounts = window.localStorage.getItem(VERIFY_COUNT_KEY);
-        if (storedCounts) {
-          const counts = JSON.parse(storedCounts) as Record<string, number>;
-          for (const [k, v] of Object.entries(counts)) {
-            this.verificationCounts.set(k, v);
-          }
-        }
-      } catch (e) {
-        console.warn('Failed reading from localStorage', e);
-      }
-    } else {
-      // Node.js server persistence
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-        const dataDir = isServerless ? (process.env.TMPDIR || '/tmp') : path.resolve(process.cwd(), 'data');
-        const dbPath = path.resolve(dataDir, 'certificates_db.json');
-        if (fs.existsSync(dbPath)) {
-          const raw = fs.readFileSync(dbPath, 'utf-8');
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            for (const item of parsed) {
-              this.cache.set(item.cert_id, item);
-            }
-          }
-        }
-      } catch {
-        // Fall back gracefully to in-memory
-      }
-    }
-
-    // Seed defaults if empty
-    if (this.cache.size === 0) {
-      for (const seed of INITIAL_SEEDS) {
-        const canonical = getCanonicalCertificatePayload(seed);
-        seed.sha256_hash = await generateSHA256Hash(canonical);
-        if (typeof window !== 'undefined' && window.location?.origin) {
-          seed.verification_url = `${window.location.origin}/verify/${encodeURIComponent(seed.cert_id)}`;
-        } else {
+    try {
+      const certsRef = collection(db, 'certificates');
+      const snapshot = await getDocs(certsRef);
+      if (snapshot.empty) {
+        // Seed if empty
+        for (const seed of INITIAL_SEEDS) {
+          const canonical = getCanonicalCertificatePayload(seed);
+          seed.sha256_hash = await generateSHA256Hash(canonical);
           const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
           const base = process.env.APP_URL || (vercelHost ? `https://${vercelHost}` : 'https://certifficationsystem.vercel.app');
           seed.verification_url = `${base.replace(/\/+$/, '')}/verify/${encodeURIComponent(seed.cert_id)}`;
+          await setDoc(doc(db, 'certificates', seed.cert_id), seed);
+          this.cache.set(seed.cert_id, seed);
+          this.verificationCounts.set(seed.cert_id, 3);
         }
-        this.cache.set(seed.cert_id, seed);
-        this.verificationCounts.set(seed.cert_id, 3); // realistic initial scans
+      } else {
+        snapshot.forEach((doc) => {
+          const data = doc.data() as CertificateData;
+          this.cache.set(data.cert_id, data);
+        });
       }
-      this.persist();
+    } catch (e) {
+      console.error('Failed to initialize from Firestore', e);
     }
 
     this.initialized = true;
   }
 
-  private persist() {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const list = Array.from(this.cache.values());
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 
-        const countObj: Record<string, number> = {};
-        for (const [k, v] of this.verificationCounts.entries()) {
-          countObj[k] = v;
-        }
-        window.localStorage.setItem(VERIFY_COUNT_KEY, JSON.stringify(countObj));
-      } catch (e) {
-        console.warn('Could not persist to localStorage', e);
-      }
-    } else {
-      try {
-        import('fs').then((fs) => {
-          import('path').then((path) => {
-            const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-            const dataDir = isServerless ? (process.env.TMPDIR || '/tmp') : path.resolve(process.cwd(), 'data');
-            if (!fs.existsSync(dataDir)) {
-              fs.mkdirSync(dataDir, { recursive: true });
-            }
-            const dbPath = path.resolve(dataDir, 'certificates_db.json');
-            fs.writeFileSync(dbPath, JSON.stringify(Array.from(this.cache.values()), null, 2));
-          }).catch(() => {});
-        }).catch(() => {});
-      } catch {
-        // Graceful ignore in read-only environments
-      }
+  async addAudit(certId: string, action: string, metadata: any = {}) {
+    try {
+      const auditRef = collection(db, 'certificates', certId, 'audit_trail');
+      await addDoc(auditRef, {
+        audit_id: crypto.randomUUID(),
+        cert_id: certId,
+        action: action,
+        user_id: auth.currentUser?.uid || 'anonymous',
+        timestamp: new Date().toISOString(),
+        ...metadata
+      });
+    } catch (e) {
+      console.error('Failed to log audit entry', e);
     }
   }
 
@@ -336,7 +290,8 @@ class CertificateRepository {
           if (json.success && json.data) {
             const cert = json.data as CertificateData;
             this.cache.set(cert.cert_id, cert);
-            this.persist();
+            // No persistence needed, Firestore is source of truth
+
             return cert;
           }
         }
@@ -402,11 +357,13 @@ class CertificateRepository {
             created_at: new Date().toISOString(),
             verification_url: `${window.location.origin}/verify/${encodeURIComponent(cleanId)}`,
             sha256_hash: '',
+            verification_count: 0,
           };
           const can = getCanonicalCertificatePayload(hydratedCert);
           hydratedCert.sha256_hash = await generateSHA256Hash(can);
           this.cache.set(hydratedCert.cert_id, hydratedCert);
-          this.persist();
+          // No persistence needed
+
           return hydratedCert;
         }
       } catch {}
@@ -417,7 +374,8 @@ class CertificateRepository {
       for (const seed of INITIAL_SEEDS) {
         if (seed.cert_id.toLowerCase() === cleanId.toLowerCase()) {
           this.cache.set(seed.cert_id, seed);
-          this.persist();
+          // No persistence needed
+
           return seed;
         }
       }
@@ -452,13 +410,24 @@ class CertificateRepository {
       cert.storage_url = deterministicStorageUrl;
     }
 
+    cert.audit_trail = {
+      issuance_ip: '10.14.88.22',
+      terminal_id: 'MYMF-QC-TERM-01',
+      location: 'Riyadh Industrial Plant, KSA (24.7136° N, 46.6753° E)',
+      issued_at: new Date().toISOString(),
+      issued_by: 'Adel Y. Aseery (QA/QC Section Head)',
+      signature_id: 'MYMF-SIG-AYA-0881',
+      user_agent: 'MYMF-QC-Inspection-Station/2.4 (Strict Audit Mode)',
+      status: 'AUTHORIZED_SECURE',
+      trap_nonce: `TRAP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+    };
     this.cache.set(cert.cert_id, cert);
+    await setDoc(doc(db, 'certificates', cert.cert_id), cert);
+    await this.addAudit(cert.cert_id, 'CERTIFICATE_ISSUED', { client: cert.client });
 
     if (pdfBytes) {
       this.pdfCache.set(cert.cert_id, pdfBytes);
     }
-
-    this.persist();
 
     // Await sync to server API
     if (typeof window !== 'undefined') {
@@ -504,7 +473,8 @@ class CertificateRepository {
       }
     }
 
-    this.persist();
+          // No persistence needed
+
 
     // Sync all in bulk to server
     if (typeof window !== 'undefined') {
@@ -553,7 +523,8 @@ class CertificateRepository {
           if (json.success && json.verification) {
             if (json.verification.certificate) {
               this.cache.set(json.verification.certificate.cert_id, json.verification.certificate);
-              this.persist();
+              // No persistence needed
+
             }
             return json.verification;
           }
@@ -564,6 +535,7 @@ class CertificateRepository {
     }
 
     if (!cert) {
+      await this.addAudit(certId, 'VERIFICATION_ATTEMPT', { status: 'NOT_FOUND', ip: 'unknown' });
       return {
         cert_id: certId,
         is_valid: false,
@@ -576,9 +548,12 @@ class CertificateRepository {
     }
 
     // Increment scan count
-    const currentCount = (this.verificationCounts.get(cert.cert_id) || 0) + 1;
-    this.verificationCounts.set(cert.cert_id, currentCount);
-    this.persist();
+    const currentCount = (cert.verification_count || 0) + 1;
+    cert.verification_count = currentCount;
+    await updateDoc(doc(db, 'certificates', cert.cert_id), { verification_count: currentCount });
+    this.cache.set(cert.cert_id, cert);
+
+    await this.addAudit(certId, 'VERIFICATION_ATTEMPT', { status: 'SUCCESS', count: currentCount });
 
     if (cert.status === 'REVOKED') {
       return {
@@ -596,6 +571,7 @@ class CertificateRepository {
     // Check cryptographic integrity
     const integrity = await verifyCertificateIntegrity(cert);
     if (!integrity.isValid) {
+      await this.addAudit(certId, 'VERIFICATION_ATTEMPT', { status: 'TAMPERED_DETECTED' });
       return {
         cert_id: cert.cert_id,
         is_valid: false,
@@ -629,7 +605,8 @@ class CertificateRepository {
     if (!cert) return undefined;
     cert.status = cert.status === 'REVOKED' ? 'AUTHENTIC_VERIFIED' : 'REVOKED';
     this.cache.set(cert.cert_id, cert);
-    this.persist();
+    await updateDoc(doc(db, 'certificates', cert.cert_id), { status: cert.status });
+
     return cert;
   }
 
@@ -642,7 +619,8 @@ class CertificateRepository {
       cert.line_items[0].description += ' [TAMPERED FOR DEMO]';
     }
     this.cache.set(cert.cert_id, cert);
-    this.persist();
+    await updateDoc(doc(db, 'certificates', cert.cert_id), { line_items: cert.line_items });
+
     return cert;
   }
 

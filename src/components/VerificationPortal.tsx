@@ -19,7 +19,7 @@ import {
 import type { CertificateData, VerificationResult } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
 import { formatHashDigest } from '../services/security';
-import { generateQRCodeDataUrl } from '../services/pdfEngine';
+import { generateQRCodeDataUrl, buildVerificationUrl } from '../services/pdfEngine';
 
 interface VerificationPortalProps {
   certId: string;
@@ -51,7 +51,8 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({
 
       if (res && res.certificate) {
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        const targetUrl = `${origin}/verify/${encodeURIComponent(res.certificate.cert_id)}`;
+        // Use buildVerificationUrl to ensure parameters are included, consistent with PDF
+        const targetUrl = buildVerificationUrl(res.certificate);
         try {
           const qr = await generateQRCodeDataUrl(targetUrl);
           setQrDataUrl(qr);

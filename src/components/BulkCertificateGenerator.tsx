@@ -317,6 +317,7 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
           },
           notes: `Certified that materials for Site ${row.siteId} have been hot-dip galvanized in strict compliance with BS EN ISO 1461 standard specifications.`,
           verification_url: targetVerificationUrl,
+          verification_count: 0,
           created_at: new Date().toISOString(),
         };
 

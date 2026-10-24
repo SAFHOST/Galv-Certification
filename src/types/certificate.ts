@@ -83,6 +83,7 @@ export const CertificateDataSchema = z.object({
   storage_url: z.string().optional(),
   audit_trail: AuditTrailSchema.optional(),
   created_at: z.string().default(() => new Date().toISOString()),
+  verification_count: z.number().default(0),
 });
 
 export type CertificateData = z.infer<typeof CertificateDataSchema>;
