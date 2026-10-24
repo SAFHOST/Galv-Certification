@@ -30,7 +30,22 @@ export const PDFPreviewModal: React.FC<PDFPreviewModalProps> = ({ certificate, i
     const loadPdf = async () => {
       try {
         const response = await fetch(`/api/certificates/${encodeURIComponent(certificate.cert_id)}/pdf`);
-        if (!response.ok) throw new Error('Failed to load PDF');
+        
+        if (!response.ok) {
+          let msg = 'Failed to load PDF';
+          try {
+            const errJson = await response.json();
+            if (errJson.error) msg = errJson.error;
+          } catch {
+            try {
+              const errText = await response.text();
+              if (errText.includes('<!DOCTYPE html>')) msg = 'Server error during PDF generation. Please check logs.';
+              else if (errText) msg = errText;
+            } catch {}
+          }
+          throw new Error(msg);
+        }
+
         const bytes = new Uint8Array(await response.arrayBuffer());
 
         const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });

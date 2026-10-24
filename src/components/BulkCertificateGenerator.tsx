@@ -119,9 +119,21 @@ export const BulkCertificateGenerator: React.FC<BulkCertificateGeneratorProps> =
           let serverError = `Failed to generate PDF for ${certId}`;
           try {
             const errorJson = await response.json();
-            if (errorJson.error) serverError = `Server Error [${certId}]: ${errorJson.error}`;
+            if (errorJson.error) {
+              serverError = `Server Error [${certId}]: ${errorJson.error}`;
+            } else if (errorJson.message) {
+              serverError = `Server Error [${certId}]: ${errorJson.message}`;
+            }
           } catch {
-            // Not JSON
+            // If not JSON, try to get text
+            try {
+              const errorText = await response.text();
+              if (errorText.includes('<!DOCTYPE html>')) {
+                serverError = `Critical: Server crashed while generating ${certId}. Please check server logs.`;
+              } else if (errorText) {
+                serverError = `Server Error [${certId}]: ${errorText.slice(0, 100)}`;
+              }
+            } catch {}
           }
           throw new Error(serverError);
         }

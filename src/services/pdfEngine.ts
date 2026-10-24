@@ -27,20 +27,27 @@ async function getBrowser(): Promise<Browser> {
   }
   
   console.log('[PDF Engine] Launching new Puppeteer instance...');
-  globalBrowser = await puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--disable-gpu',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process'
-    ]
-  });
-  return globalBrowser;
+  try {
+    globalBrowser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-extensions',
+        '--font-render-hinting=none'
+      ]
+    });
+    return globalBrowser;
+  } catch (err) {
+    console.error('[PDF Engine] Failed to launch Puppeteer:', err);
+    throw new Error('PDF Engine failed to initialize. Please try again.');
+  }
 }
 
 export function buildVerificationUrl(cert: CertificateData | string, customDomain?: string): string {
@@ -101,8 +108,12 @@ export async function generateCertificatePDF(
   const stampBase64 = "data:image/jpeg;base64," + fs.readFileSync(stampPath).toString("base64");
   let html = fs.readFileSync(templatePath, 'utf8');
 
-  // Fill template
-  const cleanClient = certData.client.replace(/^Materials of M\/S\s+/i, '').replace(/^M\/S\s+/i, '');
+  // Fill template - Improved cleaning of client name to prevent duplication
+  const cleanClient = certData.client
+    .replace(/^Materials of M\/S\s+/i, '')
+    .replace(/^Materials of\s+/i, '')
+    .replace(/^M\/S\s+/i, '')
+    .trim();
   
   html = html
     .replace('{{LOGO_DATA}}', logoBase64)
@@ -123,7 +134,7 @@ export async function generateCertificatePDF(
     </tr>
   `).join('') || '<tr><td colspan="5" style="text-align:center">No items listed</td></tr>';
   
-  html = html.replace('{{TABLE_ROWS}}', html.includes('{{TABLE_ROWS}}') ? tableRows : '');
+  html = html.replace('{{TABLE_ROWS}}', tableRows);
 
   let page;
   try {
@@ -131,13 +142,19 @@ export async function generateCertificatePDF(
     page = await browser.newPage();
     
     // Set a timeout for the entire operation
-    await page.setDefaultTimeout(45000); // Increased timeout
+    await page.setDefaultTimeout(60000); 
     
-    await page.setContent(html, { waitUntil: 'networkidle0' }); // Use networkidle0 for fonts
+    // Set content and wait for fonts to load properly
+    await page.setContent(html, { waitUntil: 'networkidle2' });
+    
+    // Force font loading check
+    await page.evaluateHandle('document.fonts.ready');
+    
     const pdfBuffer = await page.pdf({ 
       format: 'A4', 
       printBackground: true,
-      margin: { top: '0.4in', right: '0.4in', bottom: '0.4in', left: '0.4in' }
+      margin: { top: '0.4in', right: '0.4in', bottom: '0.4in', left: '0.4in' },
+      preferCSSPageSize: true
     });
     
     return { 
@@ -145,7 +162,7 @@ export async function generateCertificatePDF(
       qrDataUrl, 
       verificationUrl, 
       sha256Hash, 
-      fileName: `${certData.line_items?.[0]?.site_id || 'Unknown'}_${certData.client.replace(/[^a-zA-Z0-9-_]/g, '_')}_${certData.cert_id}.pdf` 
+      fileName: `${certData.line_items?.[0]?.site_id || 'Unknown'}_MYMF_Cert_${certData.cert_id.replace(/[^a-zA-Z0-9]/g, '_')}.pdf` 
     };
   } catch (err: any) {
     console.error(`[PDF Engine] CRITICAL FAILURE for ${certData.cert_id}:`, err);

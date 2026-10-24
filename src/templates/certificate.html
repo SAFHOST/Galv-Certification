@@ -4,42 +4,136 @@
     <meta charset="UTF-8">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-        body { font-family: 'Cairo', sans-serif; font-size: 10px; margin: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        
+        * { box-sizing: border-box; }
+        body { 
+            font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-size: 11px; 
+            margin: 0; 
+            padding: 20px;
+            color: #333;
+            line-height: 1.4;
+        }
+        
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 2px solid #000; 
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        
         .header-col { flex: 1; }
-        .header-col.center { text-align: center; }
-        .header-col.right { text-align: right; direction: rtl; font-family: 'Cairo', sans-serif; }
-        .title { text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; margin-top: 20px; }
-        .metadata { display: flex; justify-content: space-between; margin-top: 20px; }
-        .cert-text { margin-top: 20px; line-height: 1.5; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background-color: #f2f2f2; border: 1px solid #000; padding: 5px; text-align: center; }
-        td { border: 1px solid #000; padding: 5px; }
-        .col-item { width: 8%; text-align: center; }
-        .col-site { width: 27%; text-align: left; }
-        .col-desc { width: 45%; text-align: left; }
-        .col-qty { width: 10%; text-align: center; }
-        .col-unit { width: 10%; text-align: center; }
-        .footer { margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
-        .sign-block { width: 30%; }
+        .header-col.left { text-align: left; font-size: 10px; }
+        .header-col.center { text-align: center; display: flex; justify-content: center; }
+        .header-col.right { 
+            text-align: right; 
+            direction: rtl; 
+            unicode-bidi: embed;
+            font-family: 'Cairo', sans-serif;
+            font-size: 10px;
+        }
+        
+        .logo-img {
+            width: 180px;
+            height: 75px;
+            object-fit: contain;
+        }
+
+        .title { 
+            text-align: center; 
+            font-size: 18px; 
+            font-weight: 800; 
+            text-decoration: underline; 
+            margin: 25px 0;
+            letter-spacing: 0.5px;
+        }
+        
+        .metadata { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .cert-text { 
+            margin-bottom: 25px; 
+            line-height: 1.6; 
+            text-align: justify;
+            font-size: 12px;
+        }
+        
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 30px; 
+        }
+        
+        th { 
+            background-color: #f8f9fa; 
+            border: 1px solid #000; 
+            padding: 8px 5px; 
+            text-align: center;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+        
+        td { 
+            border: 1px solid #000; 
+            padding: 8px 5px; 
+            vertical-align: middle;
+        }
+        
+        .col-item { width: 6%; text-align: center; }
+        .col-site { width: 22%; text-align: center; font-weight: 600; }
+        .col-desc { width: 50%; text-align: left; }
+        .col-qty { width: 11%; text-align: center; }
+        .col-unit { width: 11%; text-align: center; }
+        
+        .footer { 
+            margin-top: 50px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: flex-start; 
+        }
+        
+        .sign-block { width: 35%; text-align: left; }
         .stamp-block { width: 30%; text-align: center; }
         .qr-block { width: 30%; text-align: right; }
-        .bottom-footer { margin-top: 20px; text-align: center; border-top: 1px solid #000; padding-top: 10px; font-family: 'Cairo', sans-serif; }
-        .rtl { direction: rtl; }
+        
+        .signature-img { width: 130px; margin: 5px 0; }
+        .stamp-img { width: 140px; }
+        .qr-img { width: 100px; border: 1px solid #eee; }
+
+        .bottom-footer { 
+            margin-top: 40px; 
+            text-align: center; 
+            border-top: 1.5px solid #000; 
+            padding-top: 12px; 
+            font-size: 9px;
+            color: #555;
+        }
+        
+        .rtl { 
+            direction: rtl; 
+            unicode-bidi: embed; 
+            font-family: 'Cairo', sans-serif;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="header-col">
+        <div class="header-col left">
             <strong>Mohammed Yehya Al-Aseery</strong><br>
             For Metal Industries<br>
             CR No: 1010997047<br>
             VAT No: 302154658900006
         </div>
         <div class="header-col center">
-            <img src="{{LOGO_DATA}}" width="180" height="75" style="object-fit: contain;" alt="Logo">
+            <img src="{{LOGO_DATA}}" class="logo-img" alt="MYMF Logo">
         </div>
-        <div class="header-col right rtl" style="font-family: 'Cairo', sans-serif;">
+        <div class="header-col right rtl">
             <strong>مصنع محمد يحيى العسيري</strong><br>
             للصناعات المعدنية<br>
             س.ت: 1010997047<br>
@@ -50,8 +144,8 @@
     <div class="title">HOT DIP GALVANIZATION CERTIFICATE</div>
     
     <div class="metadata">
-        <div><strong>Cert. Ref. No.:</strong> {{CERT_REF}}</div>
-        <div><strong>Date:</strong> {{CERT_DATE}}</div>
+        <div>REF NO: {{CERT_REF}}</div>
+        <div>DATE: {{CERT_DATE}}</div>
     </div>
 
     <div class="cert-text">
@@ -61,9 +155,9 @@
     <table>
         <thead>
             <tr>
-                <th class="col-item">Item #</th>
-                <th class="col-site">Site #</th>
-                <th class="col-desc">Description</th>
+                <th class="col-item">Item</th>
+                <th class="col-site">Site ID</th>
+                <th class="col-desc">Description of Articles</th>
                 <th class="col-qty">Quantity</th>
                 <th class="col-unit">Unit</th>
             </tr>
@@ -75,21 +169,22 @@
 
     <div class="footer">
         <div class="sign-block">
-            <strong>Mohammed Yehya Al-Aseery Factory (MYMAF)</strong><br>
-            <img src="{{SIGNATURE_DATA}}" width="120" alt="Signature"><br>
-            <strong>Adel Y. Aseery</strong><br>
-            Quality Section Head
+            <div style="font-size: 10px; font-weight: bold; margin-bottom: 5px;">For MYMAF Factory:</div>
+            <img src="{{SIGNATURE_DATA}}" class="signature-img" alt="Authorized Signature"><br>
+            <div style="font-weight: bold; border-top: 1px solid #ddd; display: inline-block; padding-top: 3px;">Adel Y. Aseery</div><br>
+            <div style="font-size: 9px; color: #666;">Quality Section Head</div>
         </div>
         <div class="stamp-block">
-            <img src="{{STAMP_DATA}}" width="150" alt="Stamp">
+            <img src="{{STAMP_DATA}}" class="stamp-img" alt="Official Stamp">
         </div>
         <div class="qr-block">
-            <img src="{{QR_DATA}}" width="100" alt="QR Code">
+            <img src="{{QR_DATA}}" class="qr-img" alt="Verification QR Code">
+            <div style="font-size: 8px; color: #888; margin-top: 4px;">Scan to Verify Authenticity</div>
         </div>
     </div>
 
-    <div class="bottom-footer" style="font-family: 'Cairo', sans-serif;">
-        Kingdom of Saudi Arabia | P.O. Box: 370372, Riyadh 11325<br>
+    <div class="bottom-footer">
+        <div style="margin-bottom: 3px;">Kingdom of Saudi Arabia | P.O. Box: 370372, Riyadh 11325</div>
         <div class="rtl">المملكة العربية السعودية | ص.ب 370372، الرياض 11325</div>
     </div>
 </body>

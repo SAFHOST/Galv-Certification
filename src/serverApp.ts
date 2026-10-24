@@ -285,5 +285,15 @@ export function createExpressApp() {
   // Mount API router strictly under /api
   app.use('/api', apiRouter);
 
+  // Global Error Handler to ensure JSON responses for 500 errors
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('SERVER_ERROR:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message || 'An internal server error occurred',
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  });
+
   return app;
 }
