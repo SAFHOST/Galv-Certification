@@ -1,5 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFImage } from 'pdf-lib';
 import QRCode from 'qrcode';
+import fontkit from '@pdf-lib/fontkit';
+import arabicReshaper from 'arabic-reshaper';
 import type { CertificateData } from '../types/certificate';
 import { generateSHA256Hash, getCanonicalCertificatePayload } from './security';
 import { PDF_ASSETS } from './pdfAssets';
@@ -73,14 +75,18 @@ export async function generateCertificatePDF(
   
   // 1. Initialize PDF
   const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
   
   // A4 dimensions: 595.28 x 841.89 points
   const page = pdfDoc.addPage([595.28, 841.89]);
   const { width, height } = page.getSize();
 
-  // 2. Load Standard Fonts
+  // 2. Load Fonts
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  
+  // Load Cairo for Arabic support
+  const fontCairo = await pdfDoc.embedFont(PDF_ASSETS.fonts.cairo);
 
   // 3. Helper to draw images from base64
   const drawBase64Image = async (base64: string, x: number, y: number, w: number, h: number) => {
@@ -115,10 +121,28 @@ export async function generateCertificatePDF(
     color: rgb(0.1, 0.1, 0.1),
   });
 
-  // Center Logo (Wider dimensions)
+  // Center Logo (Balanced brand emblem)
   const logoW = 140;
   const logoH = 65;
   await drawBase64Image(PDF_ASSETS.images.logo, width / 2 - logoW / 2, height - 85, logoW, logoH);
+
+  // Right Header (Arabic Company Details - Reshaped for RTL)
+  const arabicName = arabicReshaper.reshape("مصنع محمد يحيى العسيري").split('').reverse().join('');
+  const arabicSub = arabicReshaper.reshape("للصناعات المعدنية").split('').reverse().join('');
+  const arabicCR = arabicReshaper.reshape("س.ت: ١٠١٠٩٩٧٠٤٧").split('').reverse().join('');
+  const arabicVAT = arabicReshaper.reshape("الرقم الضريبي: ٣٠٢١٥٤٦٥٨٩٠٠٠٠٦").split('').reverse().join('');
+
+  const arabicFullText = `${arabicName}\n${arabicSub}\n${arabicCR}\n${arabicVAT}`;
+  const arabicWidth = fontCairo.widthOfTextAtSize(arabicName, 9.5);
+
+  page.drawText(arabicFullText, {
+    x: width - 40 - arabicWidth,
+    y: height - 52,
+    size: 9.5,
+    font: fontCairo,
+    lineHeight: 12,
+    color: rgb(0.1, 0.1, 0.1),
+  });
 
   // Top Divider Line
   page.drawLine({
@@ -169,24 +193,26 @@ export async function generateCertificatePDF(
   const tableTop = height - 215;
   const colX = { item: 40, site: 75, desc: 230, qty: 470, unit: 515 };
 
-  // Header Box
+  // Header Box (Continuous attachment to rows)
+  const headerHeight = 22;
   page.drawRectangle({
     x: 40,
-    y: tableTop - 4,
+    y: tableTop - 7,
     width: width - 80,
-    height: 18,
+    height: headerHeight,
     borderColor: rgb(0, 0, 0),
     borderWidth: 1,
     color: rgb(0.95, 0.95, 0.95),
   });
 
-  page.drawText("Item #", { x: colX.item + 5, y: tableTop, size: 8, font: fontBold });
-  page.drawText("Site #", { x: colX.site + 5, y: tableTop, size: 8, font: fontBold });
-  page.drawText("Description of Articles", { x: colX.desc + 5, y: tableTop, size: 8, font: fontBold });
-  page.drawText("Qty", { x: colX.qty + 10, y: tableTop, size: 8, font: fontBold });
-  page.drawText("Unit", { x: colX.unit + 8, y: tableTop, size: 8, font: fontBold });
+  const headerY = tableTop + 2;
+  page.drawText("Item #", { x: colX.item + 5, y: headerY, size: 8, font: fontBold });
+  page.drawText("Site #", { x: colX.site + 5, y: headerY, size: 8, font: fontBold });
+  page.drawText("Description of Articles", { x: colX.desc + 5, y: headerY, size: 8, font: fontBold });
+  page.drawText("Qty", { x: colX.qty + 10, y: headerY, size: 8, font: fontBold });
+  page.drawText("Unit", { x: colX.unit + 8, y: headerY, size: 8, font: fontBold });
 
-  let currentY = tableTop - 25;
+  let currentY = tableTop - 7;
   const rowLineHeight = 11;
   const paddingY = 8;
 

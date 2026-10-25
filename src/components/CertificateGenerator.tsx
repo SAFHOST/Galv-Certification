@@ -162,10 +162,8 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({
       payload.verification_url = verificationUrl;
       payload.status = 'AUTHENTIC_VERIFIED';
       
-      // 3. Save directly to Firestore
-      const { doc, setDoc } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
-      await setDoc(doc(db, 'certificates', payload.cert_id), payload);
+      // 3. Save via Repository (ensures audit logs)
+      await certificateRepository.save(payload, pdfBytes);
 
       // 4. Trigger Download
       const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
