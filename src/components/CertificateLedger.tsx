@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { CertificateData } from '../types/certificate';
 import { certificateRepository } from '../services/storage';
+import { purgeAllCertificatesAndLogs } from '../lib/purgeCertificates';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 
@@ -99,6 +100,29 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
     a.download = `MYMF_Selected_Certificates_${timestamp}.zip`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handlePurgeDatabase = async () => {
+    const confirmed = window.confirm(
+      "WARNING: This will permanently delete ALL certificates and audit records from Firestore to prepare for production. Are you sure?"
+    );
+
+    if (!confirmed) return;
+
+    const doubleConfirm = window.prompt('Type "DELETE" to confirm permanent purge:');
+    if (doubleConfirm !== 'DELETE') {
+      alert("Purge cancelled.");
+      return;
+    }
+
+    try {
+      const res = await purgeAllCertificatesAndLogs();
+      alert(`Success: ${res.deletedCount} test records removed. Database is now completely clean.`);
+      window.location.reload();
+    } catch (err: any) {
+      console.error("Purge Error:", err);
+      alert("Failed to purge records: " + err.message);
+    }
   };
 
   const loadData = async () => {
@@ -378,6 +402,14 @@ export const CertificateLedger: React.FC<CertificateLedgerProps> = ({
                 <span>Bulk Excel (50+ Sites)</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={handlePurgeDatabase}
+              className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-lg transition cursor-pointer"
+            >
+              Clear All Test Data
+            </button>
 
             <button
               onClick={onCreateNew}
