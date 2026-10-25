@@ -14,234 +14,265 @@ export const CERTIFICATE_TEMPLATE = (data: any) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <style>
-        @font-face {
-            font-family: 'Cairo';
-            src: url(data:font/ttf;charset=utf-8;base64,${PDF_ASSETS.fonts.cairo}) format('truetype');
-            font-weight: normal;
-            font-style: normal;
-        }
-        
-        body {
-            font-family: 'Cairo', 'Helvetica', sans-serif;
-            margin: 0;
-            padding: 40px;
-            color: #333;
-            line-height: 1.4;
-            font-size: 12px;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #008080;
-            padding-bottom: 10px;
-        }
-
-        .header-left {
-            width: 35%;
-            font-size: 11px;
-        }
-
-        .header-center {
-            width: 30%;
-            text-align: center;
-        }
-
-        .header-center img {
-            width: 120px;
-            height: auto;
-        }
-
-        .header-right {
-            width: 35%;
-            text-align: right;
-            direction: rtl;
-            font-size: 13px;
-        }
-
-        .title-bar {
-            text-align: center;
-            margin: 20px 0;
-        }
-
-        .title-bar h1 {
-            margin: 0;
-            font-size: 20px;
-            color: #000;
-            text-decoration: underline;
-            font-weight: bold;
-        }
-
-        .metadata-bar {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px 0;
-            font-weight: bold;
-        }
-
-        .content-body {
-            margin: 20px 0;
-            text-align: justify;
-            font-size: 13px;
-        }
-
-        .table-container {
-            margin: 20px 0;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            border: 1px solid #333;
-        }
-
-        th, td {
-            border: 1px solid #333;
-            padding: 8px;
-            text-align: center;
-        }
-
-        th {
-            background-color: #f2f2f2;
-            font-weight: bold;
-        }
-
-        .col-item { width: 8%; }
-        .col-site { width: 27%; }
-        .col-desc { width: 45%; text-align: left; }
-        .col-qty { width: 10%; }
-        .col-unit { width: 10%; }
-
-        .footer-signatures {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-top: 50px;
-        }
-
-        .signature-block {
-            text-align: center;
-            width: 35%;
-        }
-
-        .signature-block img {
-            max-width: 150px;
-            height: auto;
-            display: block;
-            margin: 0 auto 5px;
-        }
-
-        .stamp-block {
-            width: 30%;
-            text-align: center;
-        }
-
-        .stamp-block img {
-            max-width: 120px;
-            height: auto;
-        }
-
-        .qr-block {
-            width: 35%;
-            text-align: right;
-        }
-
-        .qr-block img {
-            width: 100px;
-            height: 100px;
-        }
-
-        .address-footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 10px;
-            border-top: 1px solid #ccc;
-            padding-top: 10px;
-            color: #666;
-        }
-    </style>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 15mm 15mm 10mm 15mm;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+  }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+    margin: 0;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .header-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 5px;
+  }
+  .header-table td {
+    vertical-align: middle;
+    padding: 0;
+  }
+  .company-en {
+    width: 35%;
+    font-size: 11px;
+    line-height: 1.35;
+    font-weight: normal;
+  }
+  .company-en strong {
+    font-size: 12px;
+  }
+  .logo-cell {
+    width: 30%;
+    text-align: center;
+  }
+  .logo-cell img {
+    height: 75px;
+    width: auto;
+    max-width: 160px;
+    object-fit: contain;
+  }
+  .company-ar {
+    width: 35%;
+    text-align: right;
+    direction: rtl;
+    font-family: Tahoma, 'Segoe UI', Arial, sans-serif;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .company-ar strong {
+    font-size: 12px;
+  }
+  .divider {
+    border-top: 2px solid #000;
+    margin: 8px 0 12px 0;
+  }
+  .cert-title {
+    text-align: center;
+    font-size: 17px;
+    font-weight: bold;
+    text-decoration: underline;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+  }
+  .meta-table {
+    width: 100%;
+    margin-bottom: 12px;
+    font-size: 12px;
+    font-weight: bold;
+  }
+  .cert-body {
+    font-size: 11px;
+    margin-bottom: 15px;
+    line-height: 1.4;
+    text-align: justify;
+  }
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 25px;
+  }
+  .items-table th, .items-table td {
+    border: 1px solid #000;
+    padding: 7px 6px;
+    font-size: 10.5px;
+  }
+  .items-table th {
+    background-color: #f2f2f2;
+    text-align: center;
+    font-weight: bold;
+  }
+  .items-table td.col-center {
+    text-align: center;
+  }
+  .items-table td.col-site {
+    word-break: break-all;
+    white-space: normal;
+  }
+  .items-table td.col-desc {
+    word-break: break-word;
+    white-space: normal;
+  }
+  .footer-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+  .footer-table td {
+    vertical-align: top;
+    padding: 0;
+  }
+  .sig-block {
+    width: 40%;
+    font-size: 11px;
+  }
+  .sig-img {
+    height: 55px;
+    margin: 4px 0;
+    display: block;
+  }
+  .stamp-block {
+    width: 35%;
+    text-align: center;
+  }
+  .stamp-img {
+    height: 75px;
+    width: auto;
+    object-fit: contain;
+    display: inline-block;
+  }
+  .qr-block {
+    width: 25%;
+    text-align: right;
+  }
+  .qr-img {
+    width: 85px;
+    height: 85px;
+    display: inline-block;
+  }
+  .qr-caption {
+    font-size: 8px;
+    text-align: right;
+    margin-top: 2px;
+    padding-right: 8px;
+  }
+  .bottom-address {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    border-top: 1px solid #000;
+    padding-top: 5px;
+    font-size: 10px;
+    font-family: Arial, Tahoma, sans-serif;
+  }
+</style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-left">
-            <strong>Mohammed Yehya Al-Aseery</strong><br>
-            For Metal Industries<br>
-            CR No: 1010997047<br>
-            VAT No: 302154658900006
-        </div>
-        <div class="header-center">
-            <img src="${PDF_ASSETS.images.logo}" alt="MYMF Logo">
-        </div>
-        <div class="header-right">
-            <strong>مصنع محمد يحيى العسيري</strong><br>
-            للصناعات المعدنية<br>
-            س.ت: 1010997047<br>
-            الرقم الضريبي: 302154658900006
-        </div>
-    </div>
 
-    <div class="title-bar">
-        <h1>HOT DIP GALVANIZATION CERTIFICATE</h1>
-    </div>
+<!-- 1. HEADER -->
+<table class="header-table">
+  <tr>
+    <td class="company-en">
+      <strong>Mohammed Yehya Al-Aseery</strong><br>
+      For Metal Industries<br>
+      CR NO: 1010997047<br>
+      VAT NO: 302154658900006
+    </td>
+    <td class="logo-cell">
+      <img src="${PDF_ASSETS.images.logo}" alt="MYMF STEEL FABRICATOR">
+    </td>
+    <td class="company-ar">
+      <strong>مصنع محمد يحيى العسيري</strong><br>
+      للصناعات المعدنية<br>
+      س.ت: ١٠١٠٩٩٧٠٤٧<br>
+      الرقم الضريبي: ٣٠٢١٥٤٦٥٨٩٠٠٠٠٦
+    </td>
+  </tr>
+</table>
 
-    <div class="metadata-bar">
-        <span>Cert. Ref. No.: ${data.certRef}</span>
-        <span>Date: ${data.issueDate}</span>
-    </div>
+<div class="divider"></div>
 
-    <div class="content-body">
-        Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMAF) certifies that the materials of M/S ${data.cleanClientName} were hot-dip galvanized in conformance with BS EN ISO 1461 Standard.
-    </div>
+<!-- 2. TITLE & METADATA -->
+<div class="cert-title">CERTIFICATE HOT-DIP-GALVANIZATION</div>
 
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th class="col-item">Item #</th>
-                    <th class="col-site">Site #</th>
-                    <th class="col-desc">Description</th>
-                    <th class="col-qty">Qty</th>
-                    <th class="col-unit">Unit</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${data.items.map((item: any, index: number) => `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td>${item.siteNo || '-'}</td>
-                    <td>${item.description}</td>
-                    <td>${item.quantity}</td>
-                    <td>${item.unit}</td>
-                </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
+<table class="meta-table">
+  <tr>
+    <td style="text-align: left;">Cert. Ref. No.: ${data.certRef}</td>
+    <td style="text-align: right;">Date: ${data.issueDate}</td>
+  </tr>
+</table>
 
-    <div class="footer-signatures">
-        <div class="signature-block">
-            <div style="font-weight: bold; margin-bottom: 10px;">Mohammed Yehya Al-Aseery Factory (MYMAF)</div>
-            <img src="${PDF_ASSETS.images.signature}" alt="Signature">
-            <div style="border-top: 1px solid #000; padding-top: 5px;">
-                <strong>Adel Y. Aseery</strong><br>
-                Quality Section Head
-            </div>
-        </div>
-        <div class="stamp-block">
-            <img src="${PDF_ASSETS.images.stamp}" alt="Factory Stamp">
-        </div>
-        <div class="qr-block">
-            <img src="${data.qrCodeUrl}" alt="Verification QR">
-        </div>
-    </div>
+<!-- 3. CERTIFICATION STATEMENT -->
+<div class="cert-body">
+  Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMAF) certifies that materials of M/S ${data.clientName}, were hot dip galvanized in conformance to BS EN ISO 1461 Standard.
+</div>
 
-    <div class="address-footer">
-        Kingdom of Saudi Arabia | P.O. Box: 370372, Riyadh 11325 | المملكة العربية السعودية
-    </div>
+<!-- 4. LINE ITEMS TABLE -->
+<table class="items-table">
+  <thead>
+    <tr>
+      <th style="width: 8%;">Item #</th>
+      <th style="width: 27%;">Site #</th>
+      <th style="width: 47%;">Description</th>
+      <th style="width: 9%;">Quantity</th>
+      <th style="width: 9%;">Unit</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${(data.items || []).map((item: any, index: number) => `
+    <tr>
+      <td class="col-center">${item.itemNo || index + 1}</td>
+      <td class="col-site">${item.siteNo || item.site_id || '-'}</td>
+      <td class="col-desc">${item.description}</td>
+      <td class="col-center">${item.qty || item.quantity || 0}</td>
+      <td class="col-center">${item.unit || 'PCS'}</td>
+    </tr>
+    `).join('')}
+  </tbody>
+</table>
+
+<!-- DO NOT INSERT TECHNICAL SPECIFICATIONS & STANDARDS HERE. IT IS DELETED. -->
+
+<!-- 5. SIGNATURE, FACTORY STAMP & QR CODE -->
+<table class="footer-table">
+  <tr>
+    <!-- Left: Signature -->
+    <td class="sig-block">
+      <strong>Mohammed Yehya Al-Aseery Factory For Metal Industries</strong><br>
+      <span style="font-size: 10px; color: #333;">MYMAF</span><br>
+      <img src="${PDF_ASSETS.images.signature}" class="sig-img" alt="Adel Signature"><br>
+      <strong>Adel Y. Aseery.</strong><br>
+      Quality Section Head
+    </td>
+
+    <!-- Center: Blue Factory Stamp -->
+    <td class="stamp-block">
+      <img src="${PDF_ASSETS.images.stamp}" class="stamp-img" alt="Official Factory Stamp">
+    </td>
+
+    <!-- Right: QR Code -->
+    <td class="qr-block">
+      <img src="${data.qrCodeUrl}" class="qr-img" alt="QR Verification"><br>
+      <div class="qr-caption">Scan to Verify</div>
+    </td>
+  </tr>
+</table>
+
+<!-- 6. BOTTOM ADDRESS -->
+<div class="bottom-address">
+  Kingdom Of Saudi Arabia | PO Box NO: 370372 Riyadh 11325 | المملكة العربية السعودية
+</div>
+
 </body>
 </html>
 `;
