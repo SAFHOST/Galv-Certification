@@ -306,6 +306,9 @@ class CertificateRepository {
       cert.verification_url = `${window.location.origin}/verify/${encodeURIComponent(cert.cert_id)}`;
     }
     
+    // Clean client name per prompt requirements
+    cert.client = (cert.client || '').replace(/^Materials of M\/S\s*/i, '').trim();
+    
     const canonical = getCanonicalCertificatePayload(cert);
     cert.sha256_hash = await generateSHA256Hash(canonical);
     cert.status = 'AUTHENTIC_VERIFIED';

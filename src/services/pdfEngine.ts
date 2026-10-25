@@ -1,7 +1,5 @@
 import { PDFDocument, rgb, StandardFonts, PDFImage } from 'pdf-lib';
 import QRCode from 'qrcode';
-import fontkit from '@pdf-lib/fontkit';
-import arabicReshaper from 'arabic-reshaper';
 import type { CertificateData } from '../types/certificate';
 import { generateSHA256Hash, getCanonicalCertificatePayload } from './security';
 import { PDF_ASSETS } from './pdfAssets';
@@ -57,10 +55,47 @@ export async function generateQRCodeDataUrl(text: string): Promise<string> {
 }
 
 /**
+ * Helper: Draw static Arabic header to base64 image (zero npm dependencies, zero crashes)
+ * Uses browser Canvas to handle RTL, ligatures, and shaping perfectly.
+ */
+function getArabicHeaderImage(): string {
+  if (typeof document === 'undefined') return ''; // Safety for SSR
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = 400;
+  canvas.height = 140;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  // Use a clear background
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Set text properties
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#000000';
+  
+  // Line 1: Bold Company Name
+  ctx.font = 'bold 28px Tahoma, Arial, sans-serif';
+  ctx.fillText("مصنع محمد يحيى العسيري", 390, 35);
+  
+  // Line 2: Subtitle
+  ctx.font = '24px Tahoma, Arial, sans-serif';
+  ctx.fillText("للصناعات المعدنية", 390, 68);
+  
+  // Line 3: CR Number
+  ctx.font = '22px Tahoma, Arial, sans-serif';
+  ctx.fillText("س.ت: ١٠١٠٩٩٧٠٤٧", 390, 98);
+  
+  // Line 4: VAT Number
+  ctx.fillText("الرقم الضريبي: ٣٠٢١٥٤٦٥٨٩٠٠٠٠٦", 390, 128);
+
+  return canvas.toDataURL('image/png');
+}
+
+/**
  * Pure JS PDF Generator using pdf-lib.
  * 100% browser compatible - No server-side dependencies.
- * English-only to ensure font stability.
- * Final Layout Repair: Dynamic rows, scaled logo, restored stamps.
+ * Arabic rendered via Canvas-to-Image for stability.
  */
 export async function generateCertificatePDF(
   certData: CertificateData,
@@ -75,7 +110,6 @@ export async function generateCertificatePDF(
   
   // 1. Initialize PDF
   const pdfDoc = await PDFDocument.create();
-  pdfDoc.registerFontkit(fontkit);
   
   // A4 dimensions: 595.28 x 841.89 points
   const page = pdfDoc.addPage([595.28, 841.89]);
@@ -84,9 +118,6 @@ export async function generateCertificatePDF(
   // 2. Load Fonts
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  
-  // Load Cairo for Arabic support
-  const fontCairo = await pdfDoc.embedFont(PDF_ASSETS.fonts.cairo);
 
   // 3. Helper to draw images from base64
   const drawBase64Image = async (base64: string, x: number, y: number, w: number, h: number) => {
@@ -126,23 +157,11 @@ export async function generateCertificatePDF(
   const logoH = 65;
   await drawBase64Image(PDF_ASSETS.images.logo, width / 2 - logoW / 2, height - 85, logoW, logoH);
 
-  // Right Header (Arabic Company Details - Reshaped for RTL)
-  const arabicName = arabicReshaper.reshape("مصنع محمد يحيى العسيري").split('').reverse().join('');
-  const arabicSub = arabicReshaper.reshape("للصناعات المعدنية").split('').reverse().join('');
-  const arabicCR = arabicReshaper.reshape("س.ت: ١٠١٠٩٩٧٠٤٧").split('').reverse().join('');
-  const arabicVAT = arabicReshaper.reshape("الرقم الضريبي: ٣٠٢١٥٤٦٥٨٩٠٠٠٠٦").split('').reverse().join('');
-
-  const arabicFullText = `${arabicName}\n${arabicSub}\n${arabicCR}\n${arabicVAT}`;
-  const arabicWidth = fontCairo.widthOfTextAtSize(arabicName, 9.5);
-
-  page.drawText(arabicFullText, {
-    x: width - 40 - arabicWidth,
-    y: height - 52,
-    size: 9.5,
-    font: fontCairo,
-    lineHeight: 12,
-    color: rgb(0.1, 0.1, 0.1),
-  });
+  // Right Header (Arabic Company Details - Vector Canvas Image)
+  const arabicHeaderBase64 = getArabicHeaderImage();
+  if (arabicHeaderBase64) {
+    await drawBase64Image(arabicHeaderBase64, width - 180, height - 85, 140, 48);
+  }
 
   // Top Divider Line
   page.drawLine({
@@ -197,7 +216,7 @@ export async function generateCertificatePDF(
   const headerHeight = 22;
   page.drawRectangle({
     x: 40,
-    y: tableTop - 7,
+    y: tableTop - headerHeight,
     width: width - 80,
     height: headerHeight,
     borderColor: rgb(0, 0, 0),
@@ -205,14 +224,14 @@ export async function generateCertificatePDF(
     color: rgb(0.95, 0.95, 0.95),
   });
 
-  const headerY = tableTop + 2;
+  const headerY = tableTop - 15;
   page.drawText("Item #", { x: colX.item + 5, y: headerY, size: 8, font: fontBold });
   page.drawText("Site #", { x: colX.site + 5, y: headerY, size: 8, font: fontBold });
   page.drawText("Description of Articles", { x: colX.desc + 5, y: headerY, size: 8, font: fontBold });
   page.drawText("Qty", { x: colX.qty + 10, y: headerY, size: 8, font: fontBold });
   page.drawText("Unit", { x: colX.unit + 8, y: headerY, size: 8, font: fontBold });
 
-  let currentY = tableTop - 7;
+  let currentY = tableTop - headerHeight;
   const rowLineHeight = 11;
   const paddingY = 8;
 
