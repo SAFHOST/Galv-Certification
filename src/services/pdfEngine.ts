@@ -12,6 +12,39 @@ export interface PDFGenerationResult {
   fileName: string;
 }
 
+// Helper: Word wrapping with break support for long continuous strings (Site IDs)
+function wrapText(text: string, maxWidth: number, font: any, fontSize: number): string[] {
+  if (!text) return [];
+  const words = String(text).split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (font.widthOfTextAtSize(testLine, fontSize) <= maxWidth) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      if (font.widthOfTextAtSize(word, fontSize) > maxWidth) {
+        let chunk = '';
+        for (const char of word) {
+          if (font.widthOfTextAtSize(chunk + char, fontSize) <= maxWidth) {
+            chunk += char;
+          } else {
+            lines.push(chunk);
+            chunk = char;
+          }
+        }
+        currentLine = chunk;
+      } else {
+        currentLine = word;
+      }
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines;
+}
+
 export async function generateQRCodeDataUrl(text: string): Promise<string> {
   return QRCode.toDataURL(text, { 
     errorCorrectionLevel: 'H', 
@@ -25,6 +58,7 @@ export async function generateQRCodeDataUrl(text: string): Promise<string> {
  * Pure JS PDF Generator using pdf-lib.
  * 100% browser compatible - No server-side dependencies.
  * English-only to ensure font stability.
+ * Final Layout Repair: Dynamic rows, scaled logo, restored stamps.
  */
 export async function generateCertificatePDF(
   certData: CertificateData,
@@ -71,218 +105,183 @@ export async function generateCertificatePDF(
   };
 
   // 4. Draw Header
-  const headerTop = height - 50;
-  
-  // Left: English Company Info
+  // Left Header (English Company Details)
   page.drawText("Mohammed Yehya Al-Aseery\nFor Metal Industries\nCR No: 1010997047\nVAT No: 302154658900006", {
     x: 40,
-    y: headerTop,
-    size: 9,
+    y: height - 52,
+    size: 8.5,
     font: fontRegular,
-    lineHeight: 13,
+    lineHeight: 12,
     color: rgb(0.1, 0.1, 0.1),
   });
 
-  // Center: Logo
-  await drawBase64Image(PDF_ASSETS.images.logo, width / 2 - 45, height - 105, 90, 90);
+  // Center Logo (Wider dimensions)
+  const logoW = 140;
+  const logoH = 65;
+  await drawBase64Image(PDF_ASSETS.images.logo, width / 2 - logoW / 2, height - 85, logoW, logoH);
 
-  // Right: English Factory Details (Alternative to Arabic as requested)
-  page.drawText("MYMF Factory Group\nMetal Fabrication Division\nQuality Assurance Dept.\nKingdom of Saudi Arabia", {
-    x: width - 160,
-    y: headerTop,
-    size: 9,
-    font: fontRegular,
-    lineHeight: 13,
-    color: rgb(0.1, 0.1, 0.1),
-  });
-
-  // Top Divider
+  // Top Divider Line
   page.drawLine({
-    start: { x: 40, y: height - 115 },
-    end: { x: width - 40, y: height - 115 },
+    start: { x: 40, y: height - 95 },
+    end: { x: width - 40, y: height - 95 },
     thickness: 1.5,
     color: rgb(0, 0, 0),
   });
 
   // 5. Certificate Title
   page.drawText("HOT DIP GALVANIZATION CERTIFICATE", {
-    x: width / 2 - 150,
-    y: height - 145,
-    size: 16,
+    x: width / 2 - 140,
+    y: height - 120,
+    size: 13,
     font: fontBold,
     color: rgb(0, 0, 0),
   });
 
   // 6. Metadata Row
-  page.drawText(`Certificate Ref: ${certData.cert_id}`, {
+  page.drawText(`Cert. Ref. No.: ${certData.cert_id}`, {
     x: 40,
-    y: height - 175,
-    size: 10,
-    font: fontBold,
-  });
-
-  page.drawText(`Issue Date: ${certData.issue_date}`, {
-    x: width - 160,
-    y: height - 175,
-    size: 10,
-    font: fontBold,
-  });
-
-  // 7. Certification Body Text
-  const clientName = certData.client || 'Valued Client';
-  const bodyText = `Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMF) certifies that the materials listed below for ${clientName} have been hot-dip galvanized in strict conformance with BS EN ISO 1461 Standard specifications.`;
-  
-  page.drawText(bodyText, {
-    x: 40,
-    y: height - 215,
-    size: 10,
-    font: fontRegular,
-    maxWidth: width - 80,
-    lineHeight: 15,
-  });
-
-  // 8. Line Items Table
-  let tableY = height - 270;
-  const colX = [45, 100, 240, 470, 520];
-  const headers = ['Item #', 'Site ID', 'Description of Articles', 'Qty', 'Unit'];
-  
-  // Header background
-  page.drawRectangle({
-    x: 40,
-    y: tableY - 15,
-    width: width - 80,
-    height: 20,
-    color: rgb(0.95, 0.95, 0.95),
-  });
-
-  // Headers
-  headers.forEach((h, i) => {
-    page.drawText(h, {
-      x: colX[i],
-      y: tableY - 2,
-      size: 9,
-      font: fontBold,
-      color: rgb(0.2, 0.2, 0.2)
-    });
-  });
-
-  // Row Data
-  tableY -= 35;
-  certData.line_items?.forEach((item, idx) => {
-    const row = [
-      (idx + 1).toString(),
-      (item.site_id || '').toUpperCase(),
-      item.description || '-',
-      (item.quantity || 0).toString(),
-      (item.unit || 'PCS').toUpperCase()
-    ];
-
-    row.forEach((text, i) => {
-      page.drawText(text, {
-        x: colX[i],
-        y: tableY,
-        size: 9,
-        font: fontRegular,
-        maxWidth: i === 2 ? 220 : undefined,
-      });
-    });
-
-    tableY -= 20;
-    
-    // Row separator
-    page.drawLine({
-      start: { x: 40, y: tableY + 15 },
-      end: { x: width - 40, y: tableY + 15 },
-      thickness: 0.5,
-      color: rgb(0.8, 0.8, 0.8),
-    });
-  });
-
-  // 9. Technical Specs
-  tableY -= 20;
-  page.drawText("Technical Specifications & Standards:", {
-    x: 40,
-    y: tableY,
-    size: 10,
-    font: fontBold,
-  });
-  
-  tableY -= 15;
-  const specs = [
-    `Galvanizing Standard: ${certData.technical_params?.standard || 'BS EN ISO 1461'}`,
-    `Zinc Bath Temp: ${certData.technical_params?.bath_temperature_c || 450}°C`,
-    `Zinc Purity: ${certData.technical_params?.zinc_purity_percent || 99.995}%`,
-    `Min. Required DFT: ${certData.technical_params?.min_required_dft_um || 85} µm`
-  ];
-  
-  specs.forEach(spec => {
-    page.drawText(`• ${spec}`, {
-      x: 50,
-      y: tableY,
-      size: 9,
-      font: fontRegular,
-    });
-    tableY -= 12;
-  });
-
-  // 10. QR Code (Bottom Left)
-  try {
-    const pureQrBase64 = qrCodeDataUrl.split(',')[1];
-    const qrImgBytes = Uint8Array.from(atob(pureQrBase64), c => c.charCodeAt(0));
-    const qrImg = await pdfDoc.embedPng(qrImgBytes);
-    page.drawImage(qrImg, {
-      x: 40,
-      y: 60,
-      width: 75,
-      height: 75,
-    });
-    
-    page.drawText("Scan to verify authenticity", {
-      x: 40,
-      y: 50,
-      size: 7,
-      font: fontRegular,
-      color: rgb(0.4, 0.4, 0.4),
-    });
-  } catch (e) {
-    console.error("QR embedding failed", e);
-  }
-
-  // 11. Sign-off (Bottom Right)
-  const rightX = width - 180;
-  await drawBase64Image(PDF_ASSETS.images.signature, rightX, 100, 120, 40);
-  await drawBase64Image(PDF_ASSETS.images.stamp, rightX + 80, 60, 70, 70);
-
-  page.drawText("Authorized Signature", {
-    x: rightX,
-    y: 90,
+    y: height - 145,
     size: 9,
     font: fontBold,
   });
+
+  page.drawText(`Date: ${certData.issue_date}`, {
+    x: width - 150,
+    y: height - 145,
+    size: 9,
+    font: fontBold,
+  });
+
+  // 7. Certification Body Text (Clean client name)
+  const cleanClient = (certData.client || 'Valued Client').replace(/^Materials of M\/S\s*/i, '').trim();
+  const statement = `Mohammed Yehya Al-Aseery Factory For Metal Industries (MYMAF) certifies that the materials of M/S ${cleanClient} were hot-dip galvanized in conformance with BS EN ISO 1461 Standard.`;
   
-  page.drawText(`${certData.sign_off?.name || 'Adel Y. Aseery'}\n${certData.sign_off?.role || 'Quality Head'}`, {
-    x: rightX,
-    y: 75,
-    size: 8,
+  page.drawText(statement, {
+    x: 40,
+    y: height - 172,
+    size: 9,
     font: fontRegular,
-    lineHeight: 10,
+    maxWidth: width - 80,
+    lineHeight: 13,
   });
 
-  // 12. Footer
-  page.drawLine({
-    start: { x: 40, y: 40 },
-    end: { x: width - 40, y: 40 },
-    thickness: 1,
-    color: rgb(0, 0, 0),
+  // 8. Line Items Table (Dynamic Height & Wrapping)
+  const tableTop = height - 215;
+  const colX = { item: 40, site: 75, desc: 230, qty: 470, unit: 515 };
+
+  // Header Box
+  page.drawRectangle({
+    x: 40,
+    y: tableTop - 4,
+    width: width - 80,
+    height: 18,
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 1,
+    color: rgb(0.95, 0.95, 0.95),
   });
 
-  const footerLine = "PO Box 370372, Riyadh 11325, KSA | Tel: +966 11 498 2211 | Email: qc@mymf.com.sa | www.mymf.com.sa";
-  page.drawText(footerLine, {
-    x: width / 2 - (fontRegular.widthOfTextAtSize(footerLine, 8) / 2),
-    y: 25,
+  page.drawText("Item #", { x: colX.item + 5, y: tableTop, size: 8, font: fontBold });
+  page.drawText("Site #", { x: colX.site + 5, y: tableTop, size: 8, font: fontBold });
+  page.drawText("Description of Articles", { x: colX.desc + 5, y: tableTop, size: 8, font: fontBold });
+  page.drawText("Qty", { x: colX.qty + 10, y: tableTop, size: 8, font: fontBold });
+  page.drawText("Unit", { x: colX.unit + 8, y: tableTop, size: 8, font: fontBold });
+
+  let currentY = tableTop - 25;
+  const rowLineHeight = 11;
+  const paddingY = 8;
+
+  certData.line_items?.forEach((item, idx) => {
+    const siteNo = (item.site_id || '').toUpperCase();
+    const description = item.description || '-';
+    
+    const siteLines = wrapText(siteNo, 145, fontRegular, 8);
+    const descLines = wrapText(description, 230, fontRegular, 8);
+    const maxLines = Math.max(siteLines.length, descLines.length, 1);
+    const rowHeight = maxLines * rowLineHeight + paddingY * 2;
+
+    // Draw Dynamic Row Border
+    page.drawRectangle({
+      x: 40,
+      y: currentY - rowHeight,
+      width: width - 80,
+      height: rowHeight,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 0.5,
+    });
+
+    // Item #
+    page.drawText((idx + 1).toString(), {
+      x: colX.item + 10,
+      y: currentY - paddingY - 8,
+      size: 8,
+      font: fontRegular,
+    });
+
+    // Wrapped Site ID
+    siteLines.forEach((line, i) => {
+      page.drawText(line, {
+        x: colX.site + 5,
+        y: currentY - paddingY - 8 - (i * rowLineHeight),
+        size: 8,
+        font: fontRegular,
+      });
+    });
+
+    // Wrapped Description
+    descLines.forEach((line, i) => {
+      page.drawText(line, {
+        x: colX.desc + 5,
+        y: currentY - paddingY - 8 - (i * rowLineHeight),
+        size: 8,
+        font: fontRegular,
+      });
+    });
+
+    // Qty & Unit
+    page.drawText((item.quantity || 0).toString(), {
+      x: colX.qty + 12,
+      y: currentY - paddingY - 8,
+      size: 8,
+      font: fontRegular,
+    });
+    page.drawText((item.unit || 'PCS').toUpperCase(), {
+      x: colX.unit + 10,
+      y: currentY - paddingY - 8,
+      size: 8,
+      font: fontRegular,
+    });
+
+    // Advance Y downward
+    currentY -= rowHeight;
+  });
+
+  // 9. SIGNATURE, STAMP, AND VERIFICATION QR CODE (PINNED TO BOTTOM)
+  // Pin footer elements relative to bottom or currentY
+  const footerY = Math.min(currentY - 35, 170);
+
+  // Left: Authority & Adel Signature
+  page.drawText("Mohammed Yehya Al-Aseery Factory (MYMAF)", { x: 40, y: footerY + 50, size: 9, font: fontBold });
+  await drawBase64Image(PDF_ASSETS.images.signature, 40, footerY + 5, 85, 40);
+  page.drawText("Adel Y. Aseery\nQuality Section Head", { x: 40, y: footerY - 10, size: 8, font: fontRegular, lineHeight: 11 });
+
+  // Center: Blue Factory Stamp
+  await drawBase64Image(PDF_ASSETS.images.stamp, width / 2 - 55, footerY - 15, 110, 65);
+
+  // Right: Scannable Verification QR Code
+  const qrW = 85;
+  const qrH = 85;
+  const qrImgBytes = Uint8Array.from(atob(qrCodeDataUrl.split(',')[1]), c => c.charCodeAt(0));
+  const qrImg = await pdfDoc.embedPng(qrImgBytes);
+  page.drawImage(qrImg, { x: width - 130, y: footerY - 15, width: qrW, height: qrH });
+  page.drawText("Scan to Verify", { x: width - 118, y: footerY - 24, size: 7, font: fontRegular });
+
+  // 10. Bottom Legal Divider & Location Bar
+  page.drawLine({ start: { x: 40, y: 55 }, end: { x: width - 40, y: 55 }, thickness: 1, color: rgb(0, 0, 0) });
+  page.drawText("Kingdom of Saudi Arabia | P.O. Box: 370372, Riyadh 11325", {
+    x: width / 2 - 130,
+    y: 42,
     size: 8,
     font: fontRegular,
-    color: rgb(0.3, 0.3, 0.3),
   });
 
   // Finalize
@@ -297,5 +296,6 @@ export async function generateCertificatePDF(
     fileName,
   };
 }
+
 
 
